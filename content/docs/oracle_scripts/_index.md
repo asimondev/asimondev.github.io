@@ -108,7 +108,7 @@ Do not forget to run *root.sh* script as root on the corresponding server(s).
 
 ### See Also
 
-[Installing and cloning of database homes]({{< relref "installing_and_cloning.md" >}})
+[Installing and Cloning of Database Homes]({{< relref "installing_and_cloning.md" >}})
 
 
 ## Database Creation.
