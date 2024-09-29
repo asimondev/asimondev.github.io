@@ -1,7 +1,7 @@
 +++
 title = 'How To Migrate non-CDB 19c Database to PDB?'
 date = 2024-09-29T16:48:17+02:00
-draft = true
+draft = false
 +++
 
 ## How To Migrate non-CDB Database To PDB?
