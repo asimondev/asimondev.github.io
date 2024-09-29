@@ -150,7 +150,7 @@ The **-r** option (RAC) installs per default on all cluster nodes.
 
 ### Examples of out-of-place patching.
 
-* [Single Instance Cloning and Patching]({{< relref "cloning_single_instance.md" >}})
-* [RAC Cloning and Patching]({{< relref "cloning_rac.md" >}})
-* [RAC Cloning and Patching Using Gold Image]({{< relref "cloning_rac_gold_image.md" >}})
+- [Single Instance Cloning and Patching]({{< relref "cloning_single_instance.md" >}})
+- [RAC Cloning and Patching]({{< relref "cloning_rac.md" >}})
+- [RAC Cloning and Patching Using Gold Image]({{< relref "cloning_rac_gold_image.md" >}})
 
