@@ -1,7 +1,7 @@
 +++
 title = 'Home Page'
 date = 2024-09-29T15:27:44+02:00
-draft = true
+draft = false
 +++
 
 ## Tips and Tricks for Working with Oracle Database.
