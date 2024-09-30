@@ -175,7 +175,7 @@ alter pluggable databsae ... open instances=all;
 ```
 conn / as sysdba
 exec dbms_pdb.clear_plugin_violations('PDB_Name');
-select * from pdb_plug_in_violations where name='PDBName' order by time;
+select * from pdb_plug_in_violations where name='PDB_Name' order by time;
 ```
 
 ### Check Installed Database Options
@@ -192,7 +192,6 @@ col version for a10
 select comp_id, comp_name, status, version from dba_registry order by 1;
 ```
 
-
 ### Install Missing Database Options in PDB
 
 Sometimes you have to install missing options in PDB, because they 
@@ -202,3 +201,11 @@ often missing database options.
 - APS: @?/olap/admin/cataps.sql
 - XOQ: @?/olap/admin/catxoq.sql
 - Context: @?/ctx/admin/catctx.sql ctxsys SYSAUX TEMP NOLOCK
+
+### How to Drop PDB?
+
+```
+conn / as sysdba
+alter pluggable database PDB_Name close immediate instances=all;
+drop pluggable database PDB_Name including datafiles;
+```
