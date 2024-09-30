@@ -107,7 +107,7 @@ select * from pdb_plug_in_violations order by time;
 select * from pdb_plug_in_violations where name='PDBName' order by time;
 ```
 
-## Check PDB Database Parameters.
+## Check PDB Database Parameters
 
 Some of parameters will be copied from non-CDB database. Other parameters
 will be set using values from the CDB$ROOT.
@@ -130,7 +130,7 @@ order by name
 /
 
 ```
-### Run noncdb_to_pdb.sql script.
+### Run noncdb_to_pdb.sql Script
 
 ```
 conn / as sysdba
@@ -163,7 +163,7 @@ conn / as sysdba
 alter pluggable databsae ... open instances=all;
 ```
 
-## Troubleshooting.
+## Troubleshooting
 
 ### Clean up Old Rows from PDB_PLUG_IN_VIOLATIONS
 
