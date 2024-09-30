@@ -71,8 +71,8 @@ select open_mode from v$database;
 ### RAC
 
 ```
-srvctl stop database -db tadminluc3
-srvctl start instance -db tadminluc3 -instance TADMIN1 -startoption "read only"
+srvctl stop database -db ga
+srvctl start instance -db ga -instance ga1 -startoption "read only"
 ```
 
 ## Create Pluggable Database
