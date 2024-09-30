@@ -4,7 +4,12 @@ date = 2024-09-29T16:48:17+02:00
 draft = false
 +++
 
-## Create Migration User on Non-CDB Database
+## Create Migration User on Non-CDB Database.
+
+You have to create a new user or use an existing user with the
+specific privileges. For instance, you would create a new user
+**noncdbadmin** for the migration. You can drop this user after 
+migration.
 
 ```
 conn / as sysdba
@@ -33,7 +38,7 @@ Usually you would use the CDB with the latest Unicode variable-width
 multibyte character set (AL32UTF8). This would allow you to 
 migrate non-cdb databases and PDBs with other character sets as well.
 
-### Create Database Link from CDB Root Container
+## Create Database Link from CDB Root Container to Non-CDB Database
 
 ```
 conn / as sysdba
@@ -41,6 +46,7 @@ conn / as sysdba
 define my_link='my_non_cdb'
 define my_non_cdb_user='noncdbadmin'
 define my_pwd='andrej'
+-- Use Easy Connect string or TNS alias.
 define my_tns='rkol7db1/g01.world'
 
 set echo on
@@ -88,7 +94,6 @@ define my_non_cdb=g01@my_non_cdb
 
 set echo on
 
-
 create pluggable database &my_pdb from &my_non_cdb
 /
 ```
@@ -102,15 +107,11 @@ select * from pdb_plug_in_violations order by time;
 select * from pdb_plug_in_violations where name='PDBName' order by time;
 ```
 
-Check PDB parameters:
+## Check PDB Database Parameters.
 
-```
-conn / as sysdba
-select name, con_uid from v$pdbs order by name;
-select name, value$ from pdb_spfile$ where pdb_uid=...
-order by name
-/
-```
+Some of parameters will be copied from non-CDB database. Other parameters
+will be set using values from the CDB$ROOT.
+
 
 Reset PDB parameters:
 ```
@@ -155,7 +156,7 @@ select * from pdb_plug_in_violations order by time;
 select * from pdb_plug_in_violations where name='PDBName' order by time;
 ```
 
-### Open new PDB
+### Open New PDB
 
 ```
 conn / as sysdba
@@ -164,7 +165,7 @@ alter pluggable databsae ... open instances=all;
 
 ## Troubleshooting.
 
-### Clean up old rows from PDB_PLUG_IN_VIOLATIONS
+### Clean up Old Rows from PDB_PLUG_IN_VIOLATIONS
 
 ```
 conn / as sysdba
@@ -173,10 +174,11 @@ commit;
 select * from pdb_plug_in_violations where name='PDBName' order by time;
 ```
 
-### Install database options.
+### Install Missing Database Options in PDB
 
-Sometimes you have install missing options in PDB, because they are already 
-installed in CDB.
+Sometimes you have to install missing options in PDB, because they 
+are already installed in CDB. Below some examples for installing
+often missing database options.
 
 - APS: @?/olap/admin/cataps.sql
 - XOQ: @?/olap/admin/catxoq.sql
