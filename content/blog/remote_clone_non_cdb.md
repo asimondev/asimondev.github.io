@@ -62,7 +62,7 @@ select * from global_name;
 select * from global_name@&my_link;
 ```
 
-Both SELECTs at the end should return **valid** results!
+Both *SELECTs* at the end should return **valid** results!
 
 ## Set non-CDB database in READ ONLY mode
 
@@ -84,12 +84,15 @@ srvctl start instance -db ga -instance ga1 -startoption "read only"
 ## Create Pluggable Database
 
 We use *Remote Clone* multitenant feature to clone the existing
-non-CDB database into the existing CDB as a new PDB.
+non-CDB database into the existing CDB as a new PDB. You should use
+the database name and not the database unique name for the non-CDB 
+database.
 
 ```
 conn / as sysdba
 
 define my_pdb=pdbg01
+-- Use database name (g01) and not database unique name!
 define my_non_cdb=g01@my_non_cdb
 
 set echo on
@@ -98,7 +101,7 @@ create pluggable database &my_pdb from &my_non_cdb
 /
 ```
 
-The created PDB will be in MOUNT status.
+The created PDB will be in MOUNT status: `show pdbs`
 
 Check PDB_PLUG_IN_VIOLATIONS:
 
@@ -118,6 +121,7 @@ Reset PDB parameters:
 conn / as sysdba
 
 alter session set container=...
+show parameter ...
 alter system reset ...
 alter system reset ... scope=spfile
 
@@ -152,6 +156,7 @@ show pdbs
 Check PDB_PLUG_IN_VIOLATIONS:
 
 ```
+conn / as sysdba
 select * from pdb_plug_in_violations order by time;
 select * from pdb_plug_in_violations where name='PDBName' order by time;
 ```
@@ -170,9 +175,23 @@ alter pluggable databsae ... open instances=all;
 ```
 conn / as sysdba
 exec dbms_pdb.clear_plugin_violations('PDB_Name');
-commit;
 select * from pdb_plug_in_violations where name='PDBName' order by time;
 ```
+
+### Check Installed Database Options
+
+```
+set echo on
+
+set linesi 80 pagesi 20
+col comp_id for a10
+col comp_name for a35
+col status for a10
+col version for a10
+
+select comp_id, comp_name, status, version from dba_registry order by 1;
+```
+
 
 ### Install Missing Database Options in PDB
 
