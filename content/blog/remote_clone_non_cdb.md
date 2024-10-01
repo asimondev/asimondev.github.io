@@ -2,6 +2,12 @@
 title = 'How To Migrate Non-CDB 19c Database to PDB?'
 date = 2024-09-29T16:48:17+02:00
 draft = false
+summary = """
+You can use Remote Clone and Refreshable Clone to create a new PDB
+from the existing non-CDB database in a few steps. The corresponding SQL 
+statement would copy in parallel datafiles from the non-CDB database 
+directly to the CDB database. The script noncdb_to_pdb.sql helps 
+to convert the existing database data dictionary from non-CDB to PDB."""
 +++
 
 ## Create Migration User on Non-CDB Database.
@@ -66,11 +72,26 @@ Both *SELECTs* at the end should return **valid** results!
 
 Now you are ready to create a new PDB from the existing non-CDB database. 
 You could use one of these two methods:
-- Cloning a remote non-CDB database with one command.
+- Cloning a remote non-CDB database to PDB with one SQL statement;
 - Create a refreshable clone of the remote non-CDB dataase at first. In the next
 step you would refresh the clone before starting the data dictionary migration.
 
+You would usually use just *remote clone*, if the non-CDB database is small
+or you can afford to set this database to *read only* for long time. 
+
+The usage of *refreshable clone* helps to reduce the downtime window. During 
+the creating of PDB as *refreshable clone*, the non-CDB database can stay 
+opened in *read write* mode as usual. Only the second step (*refresh*) will 
+be executed in *read only* mode.
+
 ## Cloning a Remote Non-CDB
+
+We use *remote clone* multitenant feature to clone the existing
+non-CDB database into the existing CDB as a new PDB. 
+
+You must use the database name and not the database unique name for 
+the non-CDB database name in the *FROM* clause together with the 
+database link name.
 
 ### Set non-CDB database in READ ONLY mode
 
@@ -90,11 +111,6 @@ srvctl start instance -db ga -instance ga1 -startoption "read only"
 ```
 
 ### Create Pluggable Database
-
-We use *Remote Clone* multitenant feature to clone the existing
-non-CDB database into the existing CDB as a new PDB. You should use
-the database name and not the database unique name for the non-CDB 
-database.
 
 ```
 conn / as sysdba
@@ -144,7 +160,7 @@ select * from pdb_plug_in_violations order by time;
 select * from pdb_plug_in_violations where name='PDBName' order by time;
 ```
 
-Now you can refresh the created PDB. Before doing this you should set 
+Now you can refresh the created PDB. Before doing that you should set 
 the source database in the *READ ONLY* mode (see above). Don't open this PDB!
 
 ```
@@ -223,6 +239,24 @@ select * from pdb_plug_in_violations where name='PDBName' order by time;
 ```
 conn / as sysdba
 alter pluggable databsae ... open instances=all;
+```
+
+### Possible Next Steps
+
+#### Database Services
+
+You have to delete the services on the non-CDB database and create 
+them on the new PDB. Don't forget to link the services to the new PDB!
+
+#### PDB State
+
+If you want to open the new PDB automatically, you have to start 
+this PDB and save the current state.
+
+```
+conn / as sysdba
+alter pluggable database PDB_Name open instances=all;
+alter pluggable database all save state instances=all;
 ```
 
 ## Troubleshooting
