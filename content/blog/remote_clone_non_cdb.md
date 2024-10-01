@@ -64,9 +64,17 @@ select * from global_name@&my_link;
 
 Both *SELECTs* at the end should return **valid** results!
 
-## Set non-CDB database in READ ONLY mode
+Now you are ready to create a new PDB from the existing non-CDB database. 
+You could use one of these two methods:
+- Cloning a remote non-CDB database with one command.
+- Create a refreshable clone of the remote non-CDB dataase at first. In the next
+step you would refresh the clone before starting the data dictionary migration.
 
-### Single Instance
+## Cloning a Remote Non-CDB
+
+### Set non-CDB database in READ ONLY mode
+
+#### Single Instance
 
 ```
 shutdown immediate
@@ -74,14 +82,14 @@ startup open read only
 select open_mode from v$database;
 ```
 
-### RAC
+#### RAC
 
 ```
 srvctl stop database -db ga
 srvctl start instance -db ga -instance ga1 -startoption "read only"
 ```
 
-## Create Pluggable Database
+### Create Pluggable Database
 
 We use *Remote Clone* multitenant feature to clone the existing
 non-CDB database into the existing CDB as a new PDB. You should use
@@ -107,7 +115,56 @@ Check PDB_PLUG_IN_VIOLATIONS:
 
 ```
 select * from pdb_plug_in_violations order by time;
+select * from pdb_plug_in_violations where name='PDB_Name' order by time;
+```
+
+## Cloning a Remote Non-CDB using Refreshable Clone PDB
+
+During the cloning the source database can be uses as usual.
+
+```
+conn / as sysdba
+
+define my_pdb=pdbg01
+-- Use database name (g01) and not database unique name!
+define my_non_cdb=g01@my_non_cdb
+
+set echo on
+
+create pluggable database &my_pdb from &my_non_cdb refresh mode manual
+/
+```
+
+The created PDB will be in MOUNT status: `show pdbs`
+
+Check PDB_PLUG_IN_VIOLATIONS:
+
+```
+select * from pdb_plug_in_violations order by time;
 select * from pdb_plug_in_violations where name='PDBName' order by time;
+```
+
+Now you can refresh the created PDB. Before doing this you should set 
+the source database in the *READ ONLY* mode (see above). Don't open this PDB!
+
+```
+conn / as sysdba
+-- define my_pdb=pdbg01
+alter pluggable database &my_pdb refresh
+/
+```
+
+After *REFRESH* you must disable this PDB as *Refreshable Clone PDB*.
+
+```
+conn / as sysdba
+
+-- define my_pdb=pdbg01
+
+set echo on
+
+alter pluggable database &my_pdb refresh mode none
+/
 ```
 
 ## Check PDB Database Parameters
