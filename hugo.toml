@@ -1,6 +1,6 @@
 baseURL = 'https://asimondev.github.io/'
 languageCode = 'en-us'
-title = "Andrej Simon's GitHub Pages"
+title = "Andrej Simon"
 theme = "hextra"
 
 [menu]
