@@ -114,57 +114,130 @@ You can drop a standby logfile with one of the following statements:
 #### LISTENER.ORA
 
 Usually on RAC you don't have to add any entry. But this example is for
-the single instance database.
+the single instance database. If you don't have working *listener.ora* and
+*sqlnet.ora* files, you can create them using the **netca** utility:
 
 ```
-LISTENER =
-  (DESCRIPTION_LIST =
-    (DESCRIPTION =
-      (ADDRESS = (PROTOCOL = TCP)(HOST = rkol7db2)(PORT = 1521))
-      (ADDRESS = (PROTOCOL = IPC)(KEY = REGISTER))
-    )
-  )
+oracle@rkol7db1> cd $ORACLE_HOME/network/admin
 
+oracle@rkol7db1> netca -silent -responsefile $ORACLE_HOME/assistants/netca/netca.rsp 
+
+Parsing command line arguments:
+    Parameter "silent" = true
+    Parameter "responsefile" = /u01/oracle/db19f/assistants/netca/netca.rsp
+Done parsing command line arguments.
+Oracle Net Services Configuration:
+Profile configuration complete.
+Oracle Net Listener Startup:
+    Running Listener Control: 
+      /u01/oracle/db19f/bin/lsnrctl start LISTENER
+    Listener Control complete.
+    Listener started successfully.
+Listener configuration complete.
+Oracle Net Services configuration successful. The exit code is 0
+```
+
+Now you should the new entry using corresponing *ORACLE_SID*, 
+*ORACLE_HOME* and the database *GLOBAL_NAME* to the *listener.ora* file.
+
+```
+...
 SID_LIST_LISTENER =
   (SID_LIST =
     (SID_DESC =
-      (SID_NAME=db11a)
-      (ORACLE_HOME=/u01/oracle/db19a)
-      (GLOBAL_DBNAME=db11a_db1_DGMGRL.world)
+      (SID_NAME=cdbfa)
+      (ORACLE_HOME=/u01/oracle/db19f)
+      (GLOBAL_DBNAME=cdbfa_db1_DGMGRL.world)
+    )
+  )
+...
+```
+Use `lsnrctl reload` to load the new configuration to the listener.
+
+#### TNSNAMES.ORA
+```
+cdbfa_db1_rman =
+  (DESCRIPTION =
+    (ADDRESS = (PROTOCOL=TCP)(HOST=rkol7db1)(PORT = 1521))
+    (CONNECT_DATA =
+      (SERVER = DEDICATED)
+      (SID = cdbfa)
     )
   )
 
-```
-
-tnsnames.ora
-```
-db11a_rman =
+cdbfa_db2_rman =
   (DESCRIPTION =
     (ADDRESS = (PROTOCOL=TCP)(HOST=rkol7db2)(PORT = 1521))
     (CONNECT_DATA =
       (SERVER = DEDICATED)
-      (SID = db11a)
+      (SID = cdbfa)
     )
   )
 
 ```
 
+### INIT.ORA ###
 
-## Create standby database
+Now you should create a *PFILE* from the database *SPFILE*. You can use this 
+file as a template for the standby database *PFILE*.
 
-### Prepare init.ora and network files.
+```
+oracle@rkol7db1> mkdir -p /home/oracle/tests/data_guard/primary
+oracle@rkol7db1> cd /home/oracle/tests/data_guard/primary
+oracle@rkol7db1> sqlplus / as sysdba
+...
+SQL> create pfile='/home/oracle/tests/data_guard/primary/init.ora.primary' from spfile;
 
- - Copy pfile from primary to standby
- - Re-check at least the following parameters:
-    - audit_file_dest
-    - db_create_file_dest
-    - db_recovery_file_dest
-    - db_create_online_log_dest_x
-    - db_unique_name
-    - log_file_name_convert
-    - cluster_interconnects
- - Comment out control files.
- - Create adit_file_dest directory
+File created.
+```
+
+### Copy Files to Standby.
+
+You should now copy the following files to the standby server directory 
+*/home/oracle/tests/data_guard/standby*:
+- init.ora.primary
+- database password file from *$ORACLE_HOME/dbs*
+
+For RAC/ASM you could use *asmcmd cp* command to copy the password file 
+from ASM to the local file system.
+
+## Create Standby Database
+
+### Prepare INIT.ORA
+
+You should copy the *init.ora.primary* file to *init.ora.standby* file. 
+In this file you should check at least the following parameters:
+  - audit_file_dest
+  - db_create_file_dest
+  - db_recovery_file_dest
+  - db_create_online_log_dest_x
+  - db_unique_name=cdbfa_db2
+  - log_file_name_convert
+  - cluster_interconnects
+  - Comment out control files (*control_file*).
+
+Please check, if you have to create these directories.
+
+#### Single Instance
+
+Now you can start the instance in the *NOMOUNT* mode and create a new
+*SPFILE* using the *init.ora.standby* file.
+```
+oracle@rkol7db2> cp orapwcdbfa $ORACLE_HOME/dbs
+oracle@rkol7db2> export ORACLE_SID=cdbfa
+sracle@rkol7db2> sqlplus / as sysdba
+...
+SQL> startup nomount pfile='/home/oracle/tests/data_guard/standby/init.ora.standby' 
+...
+SQL> create spfile from pfile='/home/oracle/tests/data_guard/standby/init.ora.standby';
+File created.
+SQL> shutdown abort
+ORACLE instance shut down.
+SQL> startup nomount
+...
+```
+
+#### RAC
 
 - RAC: Create database configuration (srvctl + asmcmd).
 - Start instance using the pfile and create the spfile.
