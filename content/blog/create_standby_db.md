@@ -10,6 +10,11 @@ be added to the Data Guard Broker configuration.
 """
 +++
 
+The example commands use the following configuration:
+- The primary single instance database *cdbfa* runs on the server *rkol7db1*. This
+database uses Oracle Managed Files (OMF) for all database files. The database unique name is *cdbfa_db1*. The database domain is *world*.
+- The standby database should run on the server *rkol7db2* and use OMF as well.
+
 ## Preparing the Primary Database
 
 ### Set up Primary Database
@@ -41,6 +46,21 @@ select flashback_on from v$database;
 alter database flashback on;
 ```
 
+The current values on the primary database are :
+```
+SQL> select log_mode, force_logging from v$database;
+
+LOG_MODE     FORCE_LOGGING
+------------ ---------------------------------------
+NOARCHIVELOG NO
+
+SQL> select flashback_on from v$database;
+
+FLASHBACK_ON
+------------------
+NO
+```
+
 ### Parameter STANDBY_FILE_MANAGEMENT
 
 In most cases you would like to manage all files operations on the
@@ -59,7 +79,30 @@ select thread# thr, group# grp, bytes from v$log order by 1,2;
 ...
 alter database add standby thread ... logfile ... size ...
 ...
-select * from v$logfile where type = 'STANDBY' order by group#, member;
+select thread#, group#, bytes from v$standby_log order by 1, 2;
+```
+
+So will will run on the primary database:
+```
+SQL> select thread# thr, group# grp, bytes from v$log order by 1,2;
+
+       THR	  GRP	   BYTES
+---------- ---------- ----------
+	 1	    1  209715200
+	 1	    2  209715200
+	 1	    3  209715200
+
+SQL> alter database add standby logfile size 209715200;
+Database altered.
+...
+SQL> select thread#, group#, bytes from v$standby_log order by 1, 2;
+
+   THREAD#     GROUP#	   BYTES
+---------- ---------- ----------
+	 0	    4  209715200
+	 0	    5  209715200
+	 0	    6  209715200
+	 0	    7  209715200
 ```
 
 You can drop a standby logfile with one of the following statements:
@@ -68,7 +111,11 @@ You can drop a standby logfile with one of the following statements:
 
 ### Network files:
 
-listener.ora
+#### LISTENER.ORA
+
+Usually on RAC you don't have to add any entry. But this example is for
+the single instance database.
+
 ```
 LISTENER =
   (DESCRIPTION_LIST =
