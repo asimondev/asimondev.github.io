@@ -10,10 +10,34 @@ be added to the Data Guard Broker configuration.
 """
 +++
 
-The example commands use the following configuration:
-- The primary single instance database *cdbfa* runs on the server *rkol7db1*. This
+The example commands use the following configuration.
+
+Oracle RDBMS software is installed into the ORACLE_HOME */u01/oracle/db19f* on both
+servers.
+
+The primary single instance database *cdbfa* runs on the server *rkol7db1*. This
 database uses Oracle Managed Files (OMF) for all database files. The database unique name is *cdbfa_db1*. The database domain is *world*.
-- The standby database should run on the server *rkol7db2* and use OMF as well.
+
+```
+SQL> show parameter db_name
+
+NAME				     TYPE	 VALUE
+------------------------------------ ----------- ------------------------------
+db_name 			     string	 cdbfa
+SQL> show parameter db_unique_name
+
+NAME				     TYPE	 VALUE
+------------------------------------ ----------- ------------------------------
+db_unique_name			     string	 cdbfa_db1
+SQL> show parameter domain
+
+NAME				     TYPE	 VALUE
+------------------------------------ ----------- ------------------------------
+db_domain			     string	 world
+SQL> 
+```
+
+The standby database should run on the server *rkol7db2* and use OMF as well.
 
 ## Preparing the Primary Database
 
@@ -46,7 +70,7 @@ select flashback_on from v$database;
 alter database flashback on;
 ```
 
-The current values on the primary database are :
+The current values on the primary database after the changes should be :
 ```
 SQL> select log_mode, force_logging from v$database;
 
@@ -72,7 +96,7 @@ standby database automatically:
 ### Create Standby Logfiles
 
 You have to add standby logfiles to the primary database. Every thread 
-should have one more logfile.
+should have one more standby logfile as online redo logfile.
 
 ```
 select thread# thr, group# grp, bytes from v$log order by 1,2;
@@ -106,8 +130,8 @@ SQL> select thread#, group#, bytes from v$standby_log order by 1, 2;
 ```
 
 You can drop a standby logfile with one of the following statements:
-- `alter database drop standby logfile member 'LogfilePath'`;
-- `alter database drop standby logfile group NN;
+- `alter database drop standby logfile member 'LogfilePath'`
+- `alter database drop standby logfile group NN`
 
 ### Network files:
 
