@@ -37,7 +37,8 @@ db_domain			     string	 world
 SQL> 
 ```
 
-The standby database should run on the server *rkol7db2* and use OMF as well.
+The standby database should run on the server *rkol7db2* and use OMF as well. The 
+database unique name will be *cdbfa_db2*.
 
 ## Preparing the Primary Database
 
@@ -384,8 +385,6 @@ SQL> startup nomount
 
 ### Restore Primary Database To the Standby Database
 
-#### Using Oracle Database Net Easy Connect 
-
 Easy Connect Naming allows to run all commands without any new TNS aliases in 
 the *tnsnames.ora*. 
 
@@ -503,6 +502,7 @@ channels and the value of SECTION SIZE parameter.
 
 
 ### Clear logfiles in the standby control file.
+
 We have already prepared the file *clear_logfiles.log* with *ALTER DATABASE*
 commands for all online and standby redo logs. Using this file we can prepare
 and ran the script *clear_logfiles.sql* to clear the redo logs.
@@ -600,37 +600,24 @@ edit configuration set protection mode as maxavailability;
 show configuration;
 ```
 
-## Set up listener entries for both database in listener.ora
+### Run Switchover
 
-Primary:
+Connect to the primary or standby database using listener. Don't use `dgmgrl /`, because the database needs to re-connect after restarting the local database.
+
 ```
-SID_LIST_LISTENER =
-  (SID_LIST =
-    (SID_DESC =
-      (SID_NAME=acdb16)
-      (ORACLE_HOME=/u01/oracle/db19c)
-      (GLOBAL_DBNAME=acdb16_db2_DGMGRL.oracle.com)
-    )
-  )
+dgmgrl
+connect sys/oracle@rkol7db1/cdbfa_db1.world
 ```
 
-Standby:
+Run some checks before starting switchover:
+
 ```
-SID_LIST_LISTENER =
-  (SID_LIST =
-    (SID_DESC =
-      (SID_NAME=acdb16)
-      (ORACLE_HOME=/u01/oracle/db19c)
-      (GLOBAL_DBNAME=acdb16_db3_DGMGRL.oracle.com)
-    )
-  )
-```
+validate static connect identifier for all
+show configuration lag
+show configuration
+````
 
 Run switchover:
 ```
-dgmgrl
-connect sys/oracle@rkol7db2/acdb16_db2.oracle.com as sysdba
-validate static connect identifier for all;
-show configuration;
-switchover to acdb16_db3;
+switchover to cdbfa_db2
 ```
