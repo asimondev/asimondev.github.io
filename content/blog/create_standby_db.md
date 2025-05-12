@@ -1,11 +1,10 @@
 +++
-title = 'How to Add a Standby Database?'
+title = 'How to Add a Single Instance Standby Database?'
 date = 2024-10-02T21:40:38+02:00
 draft = false
 summary = """
 There are diffent ways to create and use a standby database. This 
-document describes creating a new standby database using RMAN feature
-restoring files over the network. The new standby database will 
+document describes creating a new single instance standby database using RMAN. The new standby database will 
 be added to the Data Guard Broker configuration.
 """
 +++
