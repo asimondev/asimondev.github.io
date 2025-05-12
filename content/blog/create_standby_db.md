@@ -55,7 +55,7 @@ You can set these parameters using the following statements:
 
 ```
 shutdown immediate
-alter database mount;
+startup mount
 alter database archivelog;
 shutdown immediate
 startup
