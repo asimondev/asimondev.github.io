@@ -509,9 +509,6 @@ and ran the script *clear_logfiles.sql* to clear the redo logs.
 > [!CAUTION]
 > DO NOT RUN THIS SCRIPT ON THE PRIMARY DATABASE. MAKE SURE, YOU ARE CONNECTED TO THE NEW STANDBY DATABASE!!!
 
-**DO NOT RUN THIS SCRIPT ON THE PRIMARY DATABASE. MAKE SURE, YOU ARE CONNECTED 
-TO THE NEW STANDBY DATABASE!!!**
-
 Original file from the primary database:
 ```
 oracle@rkol7db2> cat clear_logfiles.log
