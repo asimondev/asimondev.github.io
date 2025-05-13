@@ -41,6 +41,11 @@ theme = "hextra"
     [menu.main.params]
       icon = "github"
 
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.parser.attribute]
+      block = true
+
 [params]
   description = "Modern, responsive, batteries-included Hugo theme for creating beautiful static websites."
 

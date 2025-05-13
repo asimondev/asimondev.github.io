@@ -506,6 +506,9 @@ We have already prepared the file *clear_logfiles.log* with *ALTER DATABASE*
 commands for all online and standby redo logs. Using this file we can prepare
 and ran the script *clear_logfiles.sql* to clear the redo logs.
 
+> [!CAUTION]
+> DO NOT RUN THIS SCRIPT ON THE PRIMARY DATABASE. MAKE SURE, YOU ARE CONNECTED TO THE NEW STANDBY DATABASE!!!
+
 **DO NOT RUN THIS SCRIPT ON THE PRIMARY DATABASE. MAKE SURE, YOU ARE CONNECTED 
 TO THE NEW STANDBY DATABASE!!!**
 
