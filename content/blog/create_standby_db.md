@@ -11,11 +11,9 @@ be added to the Data Guard Broker configuration.
 
 The example commands use the following configuration.
 
-Oracle RDBMS software is installed into the ORACLE_HOME */u01/oracle/db19f* on both
-servers.
+Oracle RDBMS software is installed into the ORACLE_HOME */u01/oracle/db19f* on both servers.
 
-The primary single instance database *cdbfa* runs on the server *rkol7db1*. This
-database uses Oracle Managed Files (OMF) for all database files. The database unique name is *cdbfa_db1*. The database domain is *world*.
+The primary single instance database *cdbfa* runs on the server *rkol7db1*. This database uses Oracle Managed Files (OMF) for all database files. The database unique name is *cdbfa_db1*. The database domain is *world*.
 
 ```
 SQL> show parameter db_name
@@ -36,19 +34,18 @@ db_domain			     string	 world
 SQL> 
 ```
 
-The standby database should run on the server *rkol7db2* and use OMF as well. The 
-database unique name will be *cdbfa_db2*.
+The standby database should run on the server *rkol7db2* and use OMF as well. The database unique name will be *cdbfa_db2*.
 
 ## Preparing the Primary Database
 
 ### Set up Primary Database
 
-You have to enable **ARCHIVELOG** mode on the primary database. To avoid 
-possible issues during standby recovery you have to set **FORCE LOGGING** 
-as well. You can check this using the following SELECT statement:
+You have to enable **ARCHIVELOG** mode on the primary database. To avoid possible issues during standby recovery you have to set **FORCE LOGGING** as well. You can check the current values using the following SELECT statement:
 
     select log_mode, force_logging from v$database;
 
+> [!CAUTION]
+> Changing **ARCHIVELOG** mode requires restarting the database.
 
 You can set these parameters using the following statements:
 
