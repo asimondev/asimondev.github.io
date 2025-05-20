@@ -40,34 +40,8 @@ The standby database should run on the server *rkol7db2* and use OMF as well. Th
 
 ### Set up Primary Database
 
-You have to enable **ARCHIVELOG** mode on the primary database. To avoid possible issues during standby recovery you have to set **FORCE LOGGING** as well. You can check the current values using the following SELECT statement:
+You have to enable **Archivelog** mode on the primary database. To avoid possible issues during standby recovery you have to set **Force Logging** as well. It's recommended to use **Flashback Database** especially on the standby database. 
 
-    select log_mode, force_logging from v$database;
-
-> [!CAUTION]
-> Changing **ARCHIVELOG** mode requires restarting the database.
-
-You can set these parameters using the following statements:
-
-```
-shutdown immediate
-startup mount
-alter database archivelog;
-shutdown immediate
-startup
-alter database force logging;
-```
-
-It's also recommended to use *flashback* especially on the standby 
-database. 
-
-```
-select flashback_on from v$database;
-...
-alter database flashback on;
-```
-
-The current values on the primary database after the changes should be :
 ```
 SQL> select log_mode, force_logging from v$database;
 
@@ -80,6 +54,38 @@ SQL> select flashback_on from v$database;
 FLASHBACK_ON
 ------------------
 NO
+```
+
+> [!CAUTION]
+> Changing **ARCHIVELOG** mode requires restarting the database.
+
+You can set these parameters using the following statements.
+
+#### Restart the Database And Enable **Archivelog**
+
+```
+shutdown immediate
+startup mount
+alter database archivelog;
+shutdown immediate
+startup
+```
+
+#### Enable **Force Logging** And **Flashback Database**
+
+```
+alter database force logging;
+alter database flashback on;
+```
+
+The current values on the primary database after the changes should be:
+
+```
+SQL> select log_mode, force_logging, flashback_on from v$database;
+
+LOG_MODE     FORCE_LOGGING			     FLASHBACK_ON
+------------ --------------------------------------- ------------------
+ARCHIVELOG   YES				     YES
 ```
 
 ### Parameter STANDBY_FILE_MANAGEMENT
