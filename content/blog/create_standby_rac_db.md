@@ -11,7 +11,7 @@ tags = ["rac", "standby", "rman", "data guard"]
 
 The example commands use the following configuration.
 
-The primary RAC database *cdbra* runs on the servers *bol7rac1* and *bol7rac2*. This database uses ASM disk groups *DATA* and *FRA*. The database unique name is *cdbra_db1*. The database domain is *world*.
+The primary RAC database *cdbrac* runs on the servers *bol7rac1* and *bol7rac2*. This database uses ASM disk groups *DATA* and *FRA*. The database unique name is *cdbrac_db1*. The database domain is *world*.
 
 ```
 SQL> show parameter db_name
@@ -32,46 +32,14 @@ db_domain			     string	 world
 SQL> 
 ```
 
-The standby database should run on the servers *rkol7rac1* and *rkol7rac2*. The standby database will use ASM with the same disk group names. The database unique name will be *cdbra_db2*.
+The standby database should run on the servers *rkol7rac1* and *rkol7rac2*. The standby database will use ASM with the same disk group names. The database unique name will be *cdbrac_db2*.
 
 ## Preparing the Primary Database
 
 ### Set up Primary Database
 
-You have to enable **ARCHIVELOG** mode on the primary database. To avoid possible issues during standby recovery you have to set **FORCE LOGGING** as well. You can check the current values using the following SELECT statement:
+You have to enable **Archivelog** mode on the primary database. To avoid possible issues during standby recovery you have to set **Force Logging** as well. It's recommended to use **Flashback Database** especially on the standby database. 
 
-    select log_mode, force_logging from v$database;
-
-> [!CAUTION]
-> Changing **ARCHIVELOG** mode requires restarting the database.
-
-You can set these parameters using the following statements:
-
-```
-srvctl stop database -db cdbra_db1
-srvctl start instance -db cdbfa_db1 -instance cdbra1 -startoption mount
-
-sqlplus / as sysdba
-alter database archivelog;
-shutdown immediate
-exit
-
-srvctl start database -db cdbra_db1
-
-sqlplus / as sysdba
-alter database force logging;
-exit
-```
-
-It's also recommended to use *flashback* especially on the standby database. 
-
-```
-select flashback_on from v$database;
-...
-alter database flashback on;
-```
-
-The current values on the primary database after the changes should be :
 ```
 SQL> select log_mode, force_logging from v$database;
 
@@ -86,6 +54,42 @@ FLASHBACK_ON
 NO
 ```
 
+> [!CAUTION]
+> Changing **ARCHIVELOG** mode requires restarting the database.
+
+You can make these changes using the following statements.
+
+#### Restart the Database And Enable **Archivelog**
+
+```
+srvctl stop database -db cdbrac_db1
+srvctl start instance -db cdbrac_db1 -instance cdbrac1 -startoption mount
+
+sqlplus / as sysdba
+alter database archivelog;
+shutdown immediate
+exit
+
+srvctl start database -db cdbrac_db1
+
+#### Enable **Force Logging** And **Flashback Database**
+
+sqlplus / as sysdba
+alter database force logging;
+alter database flashback on;
+exit
+```
+
+The current values on the primary database after the changes should be:
+
+```
+SQL> select log_mode, force_logging, flashback_on from v$database;
+
+LOG_MODE     FORCE_LOGGING			     FLASHBACK_ON
+------------ --------------------------------------- ------------------
+ARCHIVELOG   YES				     YES
+```
+
 ### Parameter STANDBY_FILE_MANAGEMENT
 
 In most cases you would like to manage all files operations on the
@@ -96,8 +100,7 @@ standby database automatically:
 
 ### Create Standby Logfiles
 
-You have to add standby logfiles to the primary database. Every thread 
-should have one more standby logfile as online redo logfile.
+You have to add standby logfiles to the primary database. Every thread should have one more standby logfile as online redo logfiles. The logfile size must be the same.
 
 ```
 select thread# thr, group# grp, bytes from v$log order by 1,2;
