@@ -102,15 +102,8 @@ standby database automatically:
 
 You have to add standby logfiles to the primary database. Every thread should have one more standby logfile as online redo logfiles. The logfile size must be the same.
 
-```
-select thread# thr, group# grp, bytes from v$log order by 1,2;
-...
-alter database add standby thread ... logfile ... size ...
-...
-select thread#, group#, bytes from v$standby_log order by 1, 2;
-```
+#### Check Current Online Redo Logs
 
-So will will run on the primary database:
 ```
 SQL> select thread# thr, group# grp, bytes from v$log order by 1,2;
 
@@ -118,22 +111,73 @@ SQL> select thread# thr, group# grp, bytes from v$log order by 1,2;
 ---------- ---------- ----------
 	 1	    1  209715200
 	 1	    2  209715200
-	 1	    3  209715200
+	 2	    3  209715200
+	 2	    4  209715200
+````
 
-SQL> alter database add standby logfile size 209715200;
+So we have 2 threads with 2 online redo logfiles in each. 
+
+#### Adding Standby Redo Logs.
+
+Based on the output above we need to create 3 standby redo logfiles to each thread.
+
+> [!TIP]
+> Before adding new standby redo logfiles check the parameter *DB_RECOVERY_FILE_DEST_SIZE* and ASM disk groups for enough space. The standby redo logfiles could be very large.
+
+Adding standby logfiles to the 1. thread:
+
+```
+SQL> alter database add standby logfile thread 1 size 209715200;
+
 Database altered.
-...
+
+SQL> r
+  1* alter database add standby logfile thread 1 size 209715200
+
+Database altered.
+
+SQL> r
+  1* alter database add standby logfile thread 1 size 209715200
+
+Database altered.
+```
+
+Adding standby logfiles to the 2. thread:
+```
+SQL>  alter database add standby logfile thread 2 size 209715200;
+
+Database altered.
+
+SQL> r
+  1*  alter database add standby logfile thread 2 size 209715200
+
+Database altered.
+
+SQL> r
+  1*  alter database add standby logfile thread 2 size 209715200
+
+Database altered.
+```
+
+Checking standby logfiles:
+```
 SQL> select thread#, group#, bytes from v$standby_log order by 1, 2;
 
    THREAD#     GROUP#	   BYTES
 ---------- ---------- ----------
-	 0	    4  209715200
-	 0	    5  209715200
-	 0	    6  209715200
-	 0	    7  209715200
+	 1	    5  209715200
+	 1	    6  209715200
+	 1	    7  209715200
+	 2	    8  209715200
+	 2	    9  209715200
+	 2	   10  209715200
+
+6 rows selected.
 ```
 
-You can drop a standby logfile with one of the following statements:
+> [!NOTE]
+> You can drop a standby logfile using one of the following SQL statements:
+
 - `alter database drop standby logfile member 'LogfilePath'`
 - `alter database drop standby logfile group NN`
 
