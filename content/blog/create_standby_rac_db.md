@@ -11,7 +11,9 @@ tags = ["rac", "standby", "rman", "data guard"]
 
 The example commands use the following configuration.
 
-The primary RAC database *cdbrac* runs on the servers *bol7rac1* and *bol7rac2*. This database uses ASM disk groups *DATA* and *FRA*. The database unique name is *cdbrac_db1*. The database domain is *world*.
+There are 2 RAC clusters consisting of the nodes *bol7rac1a*/*bol7rac1b* and *rkol7rac1a*/*rkol7rac1b*. The OS user "grid" was used to install the Grid Infrastructre. There are 2 ASM disk groups DATA and FRA on each cluster.
+
+The RAC databases were installed using the OS user "oracle". The primary RAC database *cdbrac* runs on the servers *bol7rac1* and *bol7rac2* and uses ASM. The database unique name is *cdbrac_db1*. The database domain is *world*.
 
 ```
 SQL> show parameter db_name
@@ -32,7 +34,7 @@ db_domain			     string	 world
 SQL> 
 ```
 
-The standby database should run on the servers *rkol7rac1* and *rkol7rac2*. The standby database will use ASM with the same disk group names. The database unique name will be *cdbrac_db2*.
+The standby database should run on the servers *rkol7rac1* and *rkol7rac2*. The database unique name will be *cdbrac_db2*.
 
 ## Preparing the Primary Database
 
@@ -291,23 +293,44 @@ You should copy these TNS aliases to the standby database *tnsnames.ora* file.
 
 ### INIT.ORA ###
 
-Now you should create a *PFILE* from the primary database *SPFILE*. You can use this file as a template for the standby database *PFILE*.
+At first you should create a *PFILE* from the primary database *SPFILE*. You can use this file as a template for the standby database *PFILE*.
 
 ```
-oracle@rkol7db1> mkdir -p /home/oracle/tests/data_guard/primary
-oracle@rkol7db1> cd /home/oracle/tests/data_guard/primary
-oracle@rkol7db1> sqlplus / as sysdba
+oracle@bol7rac1a> mkdir -p /home/oracle/tests/data_guard/primary
+oracle@bol7rac1a> cd /home/oracle/tests/data_guard/primary
+oracle@bol7rac1a> sqlplus / as sysdba
 ...
 SQL> create pfile='/home/oracle/tests/data_guard/primary/init.ora.primary' from spfile;
 
 File created.
 ```
 
+### Database Password File
+
+In RAC the password file is saved in ASM. You have to copy this file from the ASM to the local file system using *asmcmd*.
+
+At first you would run the following command as *oracle* OS user to get the ASM path of the database password file.
+
+```
+oracle@bol7rac1a> srvctl config database -db cdbrac_db1
+Database unique name: cdbrac_db1
+Database name: cdbrac
+Oracle home: /u01/oracle/rac19b
+Oracle user: oracle
+Spfile: +DATA/CDBRAC_DB1/PARAMETERFILE/spfile.362.1201599925
+Password file: +DATA/CDBRAC_DB1/PASSWORD/pwdcdbrac_db1.346.1201598869
+...
+```
+
+As *grid* OS user you should run the following *asmcmd* command using password file path from the above output:  
+```
+grid@bol7rac1a> asmcmd cp +DATA/CDBRAC_DB1/PASSWORD/pwdcdbrac_db1.346.1201598869 /home/grid/orapwdcdbrac
+copying +DATA/CDBRAC_DB1/PASSWORD/pwdcdbrac_db1.346.1201598869 -> /home/grid/orapwdcdbrac
+```
+
 ### Clearing Logfiles In the Standby Database.
 
-Before starting the recovery apply on the standby database we would like to
-clear the online and standby logfiles. This would re-create them in OMF
-configuration. We can generate the script for this taks on the primary database.
+Before starting the recovery apply on the standby database we would like to clear the online and standby logfiles on the newly created standby database. This would re-create them in ASM. We can generate the script for this taks on the primary database.
 
 ```
 set echo on pagesi 1000 linesi 255 trimsp on
@@ -317,6 +340,8 @@ select distinct 'alter database clear logfile group ' || group# || ';' from v$lo
 
 spool off
 ```
+
+The output will be written to the file *clear_logfiles.log*.
 
 ### Copy Files to Standby.
 
