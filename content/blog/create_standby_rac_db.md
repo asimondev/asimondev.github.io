@@ -1,7 +1,7 @@
 +++
 title = 'How to Add a Standby RAC Database?'
 date = 2025-05-13T09:35:09+02:00
-draft = true
+draft = false
 summary = """
 There are different ways to create and use a standby database. This document describes creating a new standby RAC database using RMAN. The new standby database will be added to the Data Guard Broker configuration.
 """
@@ -252,7 +252,7 @@ The output will be written to the file *clear_logfiles.log*.
 
 #### INIT.ORA And Clear Log Files Script
 
-As *oracle* OS user on the host *rkol7db1*:  
+As *oracle* OS user on the host *rkol7db1* (standby database):  
 
     oracle@rkol7db2> mkdir -p /home/oracle/tests/data_guard/standby
 
@@ -265,162 +265,240 @@ directory */home/oracle/tests/data_guard/standby* from the directory
 - clear_logfiles.log file with online and standby redo logs.
 
 ```
-oracle@rkol7db1> cd /home/oracle/tests/data_guard/primary
-oracle@rkol7db1> scp init.ora.primary rkol7db2:/home/oracle/tests/data_guard/standby
-init.ora.primary                                                  100% 1253     1.5MB/s   00:00    
-
-oracle@rkol7db1> scp clear_logfiles.log rkol7db2:/home/oracle/tests/data_guard/standby
-clear_logfiles.log                                                100%  543   652.1KB/s   00:00    
-
-oracle@rkol7db1> scp $ORACLE_HOME/dbs/orapwcdbfa rkol7db2:/home/oracle/tests/data_guard/standby
-orapwcdbfa                                                        100% 2048     3.0MB/s   00:00    
+oracle@bol7rac1a> cd /home/oracle/tests/data_guard/primary
+oracle@bol7rac1a> scp init.ora.primary rkol7rac1a:/home/oracle/tests/data_guard/standby
+init.ora.primary                              100% 1953   591.4KB/s   00:00    
+oracle@bol7rac1a> scp clear_logfiles.log rkol7rac1a:/home/oracle/tests/data_guard/standby
+clear_logfiles.log                            100% 1123   812.1KB/s   00:00    
+oracle@bol7rac1a> 
 ```
-
-For RAC/ASM you could use *asmcmd cp* command to copy the password file 
-from ASM to the local file system.
 
 #### Database Password File
 
-As *grid* OS user 
-## Create Standby Database
+As *grid* OS user copy password file from *bol7rac1a* to *rkol7rac1a*:
+```
+grid@bol7rac1a> scp orapwdcdbrac rkol7rac1a:
+orapwdcdbrac                                  100% 2048   783.6KB/s   00:00    
+grid@bol7rac1a> 
+```
+
+### Create Standby Database
 
 Before doing the following steps, please check the environment variables 
 ORACLE_HOME and ORACLE_BASE. 
 
 ### Prepare INIT.ORA
 
-On the server *rkol7db2*:  
+On the server *rkol7rac1a*:  
 
     cd /home/oracle/tests/data_guard/standby
     cp init.ora.primary init.ora.standby
 
-In the file *init.ora.standby* you should check and maybe modify at least 
-the following parameters:
+In the file *init.ora.standby* you should check and maybe modify or comment out at least the following parameters:
   - audit_file_dest
+  - cluster_interconnects: *Often you have to modify this parameter.*
+  - control_files: *Comment out this parameter.*
   - db_create_file_dest
-  - db_file_name_convert
+  - db_file_name_convert: *Usually you don't it with ASM.*
   - db_recovery_file_dest
   - db_create_online_log_dest_xxx
-  - db_unique_name=cdbfa_db2
-  - log_file_name_convert
-  - cluster_interconnects
-  - Comment out control files (*control_file*).
+  - db_unique_name=cdbrac_db2: *This parameter must be changed!*
+  - listener_networks
+  - local_listener
+  - log_file_name_convert: *Usually you don't it with ASM.*
+  - pga_aggregate_target: *Do you have enough memory for a new standby database?*
+  - remote_listener
+  - sga_target: *Do you have enough memory for a new standby database?*
 
-We are going to use Oracle managed files (OMF) on the standby database as 
-well. That's why you usually don't need to set the parameters 
+We are going to use ASM / Oracle managed files (OMF) on the standby database as well. That's why you usually don't need to set the parameters 
 *db_file_name_convert* and *log_file_name_convert*. 
 
-Please check, if you have to create the corresponding directories:
-- audit_file_dest
-- db_create_file_dest
-- db_recovery_file_dest
-
-These are the modified parameters in *init.ora.standby* for the new standby
-database *cdbfa_db2*:
-
+Please create directory for *AUDIT_FILE_DEST* on each server.
 ```
-*.audit_file_dest='/u01/oracle/admin/cdbfa_db2/adump'
-...
-#*.control_files='/u01/oracle/databases/db19/CDBFA_DB1/controlfile/o1_mf_mhv7b60r_.ctl','/u01/oracle/databases/fra/CDBFA_DB1/controlfile/o1_mf_mhv7b64j_.ctl'
-...
-*.db_create_file_dest='/u01/oracle/databases/db19'
-...
-*.db_recovery_file_dest='/u01/oracle/databases/fra'
-...
-*.db_unique_name='cdbfa_db2'
+oracle@rkol7rac1a> mkdir -p /u01/oracle/admin/cdbrac_db2/adump
+oracle@rkol7rac1a> ssh rkol7rac1b mkdir -p /u01/oracle/admin/cdbrac_db2/adump
+oracle@rkol7rac1a> 
 ```
 
-In this case the folllowing directories must be created:
-```
-mkdir -p /u01/oracle/admin/cdbfa_db2/adump
-mkdir -p /u01/oracle/databases/db19
-mkdir -p /u01/oracle/databases/fra
-```
-
-#### Single Instance
+### Create SPFILE
 
 You can start now the new instance in the *NOMOUNT* mode and create a new
 *SPFILE* using the *init.ora.standby* file.
+
+
 ```
-oracle@rkol7db2> cp orapwcdbfa $ORACLE_HOME/dbs
-oracle@rkol7db2> export ORACLE_SID=cdbfa
-sracle@rkol7db2> sqlplus / as sysdba
+oracle@rkol7rac1a> export ORACLE_SID=cdbrac1
+oracle@rkol7rac1a> sqlplus / as sysdba
 ...
-SQL> startup nomount pfile='/home/oracle/tests/data_guard/standby/init.ora.standby' 
+SQL> startup nomount pfile='/home/oracle/tests/data_guard/standby/init.ora.standby'
+ORACLE instance started.
 ...
-SQL> create spfile from pfile='/home/oracle/tests/data_guard/standby/init.ora.standby';
+SQL> create spfile='+DATA' from pfile='/home/oracle/tests/data_guard/standby/init.ora.standby';
+
 File created.
+
 SQL> shutdown abort
 ORACLE instance shut down.
-SQL> startup nomount
 ...
 ```
 
-#### RAC
+As *grid* OS user check the *SPFILE* name in ASM.
 
-- RAC: Create database configuration (srvctl + asmcmd).
-- Start instance using the pfile and create the spfile.
-- Create or copy the password file.
-- Startup instance in nomount mode
+```
+grid@rkol7rac1a> asmcmd
+ASMCMD> ls -l +data/cdbrac_db2
+Type      Redund  Striped  Time             Sys  Name
+                                            Y    PARAMETERFILE/
+PASSWORD  UNPROT  COARSE   MAY 28 20:00:00  N    orapwdcdbrac => +DATA/DB_UNKNOWN/PASSWORD/pwddb_unknown.397.1202329809
+ASMCMD> 
+```
+
+We will use the full path for *SPFILE* for the *SRVCTL ADD DATABASE* in the next step.
+
+### Copy Database Password File
+
+As *grid* OS user copy database password file to ASM disk group.
+
+```
+grid@rkol7rac1a> asmcmd
+ASMCMD> cp /home/grid/orapwdcdbrac +DATA/CDBRAC_DB2/
+copying /home/grid/orapwdcdbrac -> +DATA/CDBRAC_DB2/orapwdcdbrac
+ASMCMD> ls -l +DATA/CDBRAC_DB2/orapwdcdbrac
+Type      Redund  Striped  Time             Sys  Name
+PASSWORD  UNPROT  COARSE   MAY 28 20:00:00  N    orapwdcdbrac => +DATA/DB_UNKNOWN/PASSWORD/pwddb_unknown.397.1202329809
+ASMCMD> quit
+```
+
+ASM has created an alias name for the database password file. We will use the full path for the *SRVCTL ADD DATABASE* in the next step.
+
+### Create Cluster Resources for Standby Database
+
+Using the output from `srvctl config database -db cdbrac_db1` on the primary database we can create the cluster resources for the new standby database. We will place all commands in the shell script *add_db.sh*.
+
+```
+oracle@rkol7rac1a> cat add_db.sh 
+#!/bin/bash
+
+DB_NAME=cdbrac
+DB_UNIQUE_NAME=cdbrac_db2
+
+srvctl add database -db $DB_UNIQUE_NAME -dbname $DB_NAME \
+  -oraclehome /u01/oracle/rac19c \
+  -domain world \
+  -pwfile +DATA/DB_UNKNOWN/PASSWORD/pwddb_unknown.397.1202329809 \
+  -dbtype RAC -role PHYSICAL_STANDBY \
+  -diskgroup data,fra \
+  -spfile +DATA/DB_UNKNOWN/PASSWORD/pwddb_unknown.397.1202329809
+
+srvctl add instance -db $DB_UNIQUE_NAME -instance cdbrac1 -node rkol7rac1a
+srvctl add instance -db $DB_UNIQUE_NAME -instance cdbrac2 -node rkol7rac1b
+```
+
+Now we can run this script, create the cluster resources and start the local instance in *NOMOUNT* mode.
+
+```
+oracle@rkol7rac1a> bash -x ./add_db.sh 
++ DB_NAME=cdbrac
++ DB_UNIQUE_NAME=cdbrac_db2
++ srvctl add database -db cdbrac_db2 -dbname cdbrac -oraclehome /u01/oracle/rac19c -domain world -pwfile +DATA/DB_UNKNOWN/PASSWORD/pwddb_unknown.397.1202329809 -dbtype RAC -role PHYSICAL_STANDBY -diskgroup data,fra -spfile +DATA/DB_UNKNOWN/PASSWORD/pwddb_unknown.397.1202329809
++ srvctl add instance -db cdbrac_db2 -instance cdbrac1 -node rkol7rac1a
++ srvctl add instance -db cdbrac_db2 -instance cdbrac2 -node rkol7rac1b
+oracle@rkol7rac1a> srvctl start instance -db cdbrac_db2 -instance cdbrac1 -startoption nomount
+oracle@rkol7rac1a> srvctl status database -db cdbrac_db2
+Instance cdbrac1 is running on node rkol7rac1a
+Instance cdbrac2 is not running on node rkol7rac1b
+```
 
 ### Restore Primary Database To the Standby Database
 
-Easy Connect Naming allows to run all commands without any new TNS aliases in 
-the *tnsnames.ora*. 
+*Easy Connect Naming* allows us to run all commands without any new TNS aliases in the *tnsnames.ora*. The primary database runs on the RAC cluster with nodes *bol7rac1a* and *bol7rac1b*. We will use the VIP node on the first node for all restore tasks. We can find out the VIP node on the primary database using the following command:
+
+```
+oracle@bol7rac1a> srvctl config vip -node bol7rac1a
+VIP exists: network number 1, hosting node bol7rac1a
+VIP Name: bol7rac1av
+VIP IPv4 Address: 192.168.5.32
+VIP IPv6 Address: 
+VIP is enabled.
+VIP is individually enabled on nodes: 
+VIP is individually disabled on nodes: 
+oracle@bol7rac1a> 
+```
+
+The VIP name is *bol7rac1av*.
 
 We will use RMAN feature *"Restoring Data Files Over the Network"* for the
-RMAN RESTORE.
+RMAN RESTORE. In this case we don't have to customize any database network files.
+
+#### Restore Control Files
 
 Create standby control files with RMAN using service:
 
 ```
-oracle@rkol7db2> cat restore_cf.rman 
+oracle@rkol7rac1a> cat restore_cf.rman 
 connect target /
-restore standby controlfile from service 'rkol7db1/cdbfa_db1.world';
+restore standby controlfile from service 'bol7rac1av/cdbrac_db1.world';
 exit;
+oracle@rkol7rac1a> rman @restore_cf.rman
 
-oracle@rkol7db2> rman @restore_cf.rman
-...
+Recovery Manager: Release 19.0.0.0.0 - Production on Wed May 28 20:58:29 2025
+Version 19.26.0.0.0
+
+Copyright (c) 1982, 2019, Oracle and/or its affiliates.  All rights reserved.
+
 RMAN> connect target *
-2> restore standby controlfile from service 'rkol7db1/cdbfa_db1.world';
+2> restore standby controlfile from service 'bol7rac1av/cdbrac_db1.world';
 3> exit;
-connected to target database: CDBFA (not mounted)
+connected to target database: CDBRAC (not mounted)
+
+Starting restore at 28-MAY-25
+using target database control file instead of recovery catalog
+allocated channel: ORA_DISK_1
+channel ORA_DISK_1: SID=393 instance=cdbrac1 device type=DISK
 ...
-output file name=/u01/oracle/databases/db19/CDBFA_DB2/controlfile/o1_mf_n239lhjw_.ctl
-output file name=/u01/oracle/databases/fra/CDBFA_DB2/controlfile/o1_mf_n239lhno_.ctl
-Finished restore at 12-MAY-25
+output file name=+DATA/CDBRAC_DB2/CONTROLFILE/current.398.1202331513
+output file name=+FRA/CDBRAC_DB2/CONTROLFILE/current.692.1202331515
+Finished restore at 28-MAY-25
 
 Recovery Manager complete.
-oracle@rkol7db2> 
+oracle@rkol7rac1a> 
 ```
 
-Now we have to mount the standby database: 
+#### Mount Standby Database
+
 ```
-sqlplus / as sysdba
-alter database mount;
-exit
+oracle@rkol7rac1a> sqlplus / as sysdba
+...
+
+SQL> alter database mount;
+
+Database altered.
+
+SQL> exit
 ```
+
+#### Restore Database
 
 Restore database with RMAN using service:
 
 ```
-oracle@rkol7db2> cat restore_db.rman 
+oracle@rkol7rac1a> cat restore_db.rman 
 connect target /
 run
 {
   allocate channel t1 device type disk;
   allocate channel t2 device type disk;
 
-  restore database from service 'rkol7db1/cdbfa_db1.world'
+  restore database from service 'bol7rac1av/cdbrac_db1.world'
     section size 256m;
 }
 exit;
+oracle@rkol7rac1a> 
 
+oracle@rkol7rac1a> rman @restore_db.rman
 
-oracle@rkol7db2> rman @restore_db.rman
-
-Recovery Manager: Release 19.0.0.0.0 - Production on Mon May 12 09:46:40 2025
-Version 19.24.0.0.0
+Recovery Manager: Release 19.0.0.0.0 - Production on Wed May 28 21:02:33 2025
+Version 19.26.0.0.0
 
 Copyright (c) 1982, 2019, Oracle and/or its affiliates.  All rights reserved.
 
@@ -430,25 +508,26 @@ RMAN> connect target *
 4>   allocate channel t1 device type disk;
 5>   allocate channel t2 device type disk;
 6> 
-7>   restore database from service 'rkol7db1/cdbfa_db1.world'
+7>   restore database from service 'bol7rac1av/cdbrac_db1.world'
 8>     section size 256m;
 9> }
 10> exit;
-connected to target database: CDBFA (DBID=898928678, not open)
+connected to target database: CDBRAC (DBID=687195340, not open)
 
 using target database control file instead of recovery catalog
 allocated channel: t1
-channel t1: SID=12 device type=DISK
+channel t1: SID=20 instance=cdbrac1 device type=DISK
 
 allocated channel: t2
-channel t2: SID=258 device type=DISK
+channel t2: SID=146 instance=cdbrac1 device type=DISK
 
-Starting restore at 12-MAY-25
-Starting implicit crosscheck backup at 12-MAY-25
-Finished implicit crosscheck backup at 12-MAY-25
+Starting restore at 28-MAY-25
+Starting implicit crosscheck backup at 28-MAY-25
+Crosschecked 1 objects
+Finished implicit crosscheck backup at 28-MAY-25
 
-Starting implicit crosscheck copy at 12-MAY-25
-Finished implicit crosscheck copy at 12-MAY-25
+Starting implicit crosscheck copy at 28-MAY-25
+Finished implicit crosscheck copy at 28-MAY-25
 
 searching for all files in the recovery area
 cataloging files...
@@ -456,21 +535,20 @@ no files cataloged
 
 
 channel t1: starting datafile backup set restore
-channel t1: using network backup set from service rkol7db1/cdbfa_db1.world
+channel t1: using network backup set from service bol7rac1av/cdbrac_db1.world
 channel t1: specifying datafile(s) to restore from backup set
-channel t1: restoring datafile 00001 to /u01/oracle/databases/db19/CDBFA_DB2/datafile/o1_mf_system_n239v22y_.dbf
-channel t1: restoring section 1 of 6
+channel t1: restoring datafile 00001 to +DATA/CDBRAC_DB2/DATAFILE/system.399.1202331757
+channel t1: restoring section 1 of 5
 channel t2: starting datafile backup set restore
-channel t2: using network backup set from service rkol7db1/cdbfa_db1.world
+channel t2: using network backup set from service bol7rac1av/cdbrac_db1.world
 channel t2: specifying datafile(s) to restore from backup set
-channel t2: restoring datafile 00003 to /u01/oracle/databases/db19/CDBFA_DB2/datafile/o1_mf_sysaux_n239v24y_.dbf
-channel t2: restoring section 1 of 4
+channel t2: restoring datafile 00003 to +DATA/CDBRAC_DB2/DATAFILE/sysaux.400.1202331757
+channel t2: restoring section 1 of 5
 ...
-channel t1: restoring datafile 00008 to /u01/oracle/databases/db19/CDBFA_DB2/238481C02E841B13E0630107A8C01C2B/datafile/o1_mf_undotbs1_n239wxqf_.dbf
-channel t1: restoring section 2 of 2
-channel t1: restore complete, elapsed time: 00:00:01
-channel t2: restore complete, elapsed time: 00:00:04
-Finished restore at 12-MAY-25
+channel t2: restoring section 1 of 1
+channel t1: restore complete, elapsed time: 00:00:03
+channel t2: restore complete, elapsed time: 00:00:02
+Finished restore at 28-MAY-25
 released channel: t1
 released channel: t2
 
@@ -478,26 +556,28 @@ Recovery Manager complete.
 ```
 
 The restore performance and network load depend on the number of allocated 
-channels and the value of SECTION SIZE parameter.
+channels and the value of *SECTION SIZE* parameter.
 
 
-### Clear logfiles in the standby control file.
+### Clear Log Files In the Standby Control Files
 
 We have already prepared the file *clear_logfiles.log* with *ALTER DATABASE*
-commands for all online and standby redo logs. Using this file we can prepare
-and ran the script *clear_logfiles.sql* to clear the redo logs.
+commands for all online and standby redo logs. Using this file we will prepare
+and run the script *clear_logfiles.sql* to clear the redo logs.
 
-**DO NOT RUN THIS SCRIPT ON THE PRIMARY DATABASE. MAKE SURE, YOU ARE CONNECTED 
-TO THE NEW STANDBY DATABASE!!!**
+> [!CAUTION]
+> DO NOT RUN THIS SCRIPT ON THE PRIMARY DATABASE!!!
+> MAKE SURE, YOU ARE CONNECTED TO THE NEW STANDBY DATABASE!!!
 
 Original file from the primary database:
 ```
-oracle@rkol7db2> cat clear_logfiles.log
+oracle@rkol7rac1a> cat clear_logfiles.log 
 SQL> 
 SQL> select distinct 'alter database clear logfile group ' || group# || ';' from v$logfile order by 1;
 
 'ALTERDATABASECLEARLOGFILEGROUP'||GROUP#||';'
 ----------------------------------------------------------------------------
+alter database clear logfile group 10;
 alter database clear logfile group 1;
 alter database clear logfile group 2;
 alter database clear logfile group 3;
@@ -505,19 +585,21 @@ alter database clear logfile group 4;
 alter database clear logfile group 5;
 alter database clear logfile group 6;
 alter database clear logfile group 7;
+alter database clear logfile group 8;
+alter database clear logfile group 9;
 
-7 rows selected.
+10 rows selected.
 
 SQL> 
-SQL> spool offexit
+SQL> spool off
 ```
 
-New created SQL file based on the *clear_logfiles.log* :
+New created SQL file *clear_logfiles.sql* based on the *clear_logfiles.log* :
 
 ```
-oracle@rkol7db2> cat clear_logfiles.sql
+oracle@rkol7rac1a> cat clear_logfiles.sql
 set echo on
-
+alter database clear logfile group 10;
 alter database clear logfile group 1;
 alter database clear logfile group 2;
 alter database clear logfile group 3;
@@ -525,46 +607,309 @@ alter database clear logfile group 4;
 alter database clear logfile group 5;
 alter database clear logfile group 6;
 alter database clear logfile group 7;
+alter database clear logfile group 8;
+alter database clear logfile group 9;
+oracle@rkol7rac1a> 
 ```
 
-Running this SQL file on the standby database:
+Run this SQL script on the standby database:
 ```
-oracle@rkol7db2> sqlplus / as sysdba
-...
+oracle@rkol7rac1a> sqlplus / as sysdba
+
+SQL*Plus: Release 19.0.0.0.0 - Production on Wed May 28 21:13:32 2025
+Version 19.26.0.0.0
+
+Copyright (c) 1982, 2024, Oracle.  All rights reserved.
+
+
+Connected to:
+Oracle Database 19c Enterprise Edition Release 19.0.0.0.0 - Production
+Version 19.26.0.0.0
+
 SQL> @clear_logfiles
-SQL> 
+SQL> alter database clear logfile group 10;
+
+Database altered.
+
 SQL> alter database clear logfile group 1;
 
 Database altered.
 ...
-SQL> alter database clear logfile group 7;
-
 Database altered.
 
 SQL> exit
 ```
 
+### Restart Database
+
+The database is restored. Now we should restart the database in *MOUNT* mode. Both instances must be running.
+
+```
+oracle@rkol7rac1a> srvctl stop database -db cdbrac_db2
+oracle@rkol7rac1a> srvctl start database -db cdbrac_db2 -startoption mount
+oracle@rkol7rac1a> srvctl status database -db cdbrac_db2
+Instance cdbrac1 is running on node rkol7rac1a
+Instance cdbrac2 is running on node rkol7rac1b
+oracle@rkol7rac1a> 
+```
+
 ## Create New Data Guard Broker Configuration
 
-### Set init.ora Parameters
+### Enable Data Guard Broker in INIT.ORA
 
-Set Data Guard database parameters on both primary and standby databases:
+#### Primary Database
 
 ```
-alter system set dg_broker_config_file1='/u01/oracle/db19f/dbs/cdbfa_dg.dat1';
-alter system set dg_broker_config_file2='/u01/oracle/db19f/dbs/cdbfa_dg.dat2';
+oracle@bol7rac1a> cat set_dg.sql
+set echo on
+alter system set dg_broker_config_file1='+data/cdbrac_db1/dgconfig.file1';
+alter system set dg_broker_config_file2='+fra/cdbrac_db1/dgconfig.file2';
 alter system set dg_broker_start=true;
+
+oracle@bol7rac1a> sqlplus / as sysdba
+...
+SQL> @set_dg
+SQL> set echo on
+SQL> alter system set dg_broker_config_file1='+data/cdbrac_db1/dgconfig.file1';
+
+System altered.
+
+SQL> alter system set dg_broker_config_file2='+fra/cdbrac_db1/dgconfig.file2';
+
+System altered.
+
+SQL> alter system set dg_broker_start=true;
+
+System altered.
+
 ```
+
+#### Standby Database
+
+```
+oracle@rkol7rac1a> cat set_dg.sql 
+set echo on
+alter system set dg_broker_config_file1='+data/cdbrac_db2/dgconfig.file1';
+alter system set dg_broker_config_file2='+fra/cdbrac_db2/dgconfig.file2';
+alter system set dg_broker_start=true;
+
+oracle@rkol7rac1a> sqlplus / as sysdba
+...
+SQL> @set_dg 
+SQL> alter system set dg_broker_config_file1='+data/cdbrac_db2/dgconfig.file1';
+
+System altered.
+
+SQL> alter system set dg_broker_config_file2='+fra/cdbrac_db2/dgconfig.file2';
+
+System altered.
+
+SQL> alter system set dg_broker_start=true;
+
+System altered.
+
+```
+
 
 ### Set up Data Guard Broker On the Primary Database
 
+We use again *Easy Connect Naming* for database connect identifiers. We use RAC SCAN names and database unique names with domains.
+
 ```
-dgmgrl / "create configuration cdbfa_dg as primary database is cdbfa_db1 connect identifier is 'rkol7db1:1521/cdbfa_db1.world'"
+oracle@bol7rac1a> cat create_config.sh 
+dgmgrl / "create configuration cdbrac_dg as primary database is cdbrac_db1 connect identifier is 'bscan1:1521/cdbrac_db1.world'"
 dgmgrl / "show configuration"
-dgmgrl / "add database cdbfa_db2 as connect identifier is 'rkol7db2:1521/cdbfa_db2.world'"
+dgmgrl / "add database cdbrac_db2 as connect identifier is 'rscan1:1521/cdbrac_db2.world'"
 dgmgrl / "show configuration"
 dgmgrl / "enable configuration"
 dgmgrl / "show configuration"
+
+oracle@bol7rac1a> bash -x ./create_config.sh 
++ dgmgrl / 'create configuration cdbrac_dg as primary database is cdbrac_db1 connect identifier is '\''bscan1:1521/cdbrac_db1.world'\'''
+DGMGRL for Linux: Release 19.0.0.0.0 - Production on Wed May 28 21:31:10 2025
+Version 19.26.0.0.0
+
+Copyright (c) 1982, 2019, Oracle and/or its affiliates.  All rights reserved.
+
+Welcome to DGMGRL, type "help" for information.
+Connected to "cdbrac_db1"
+Connected as SYSDG.
+Configuration "cdbrac_dg" created with primary database "cdbrac_db1"
++ dgmgrl / 'show configuration'
+DGMGRL for Linux: Release 19.0.0.0.0 - Production on Wed May 28 21:31:15 2025
+Version 19.26.0.0.0
+
+Copyright (c) 1982, 2019, Oracle and/or its affiliates.  All rights reserved.
+
+Welcome to DGMGRL, type "help" for information.
+Connected to "cdbrac_db1"
+Connected as SYSDG.
+
+Configuration - cdbrac_dg
+
+  Protection Mode: MaxPerformance
+  Members:
+  cdbrac_db1 - Primary database
+
+Fast-Start Failover:  Disabled
+
+Configuration Status:
+DISABLED
+
++ dgmgrl / 'add database cdbrac_db2 as connect identifier is '\''rscan1:1521/cdbrac_db2.world'\'''
+DGMGRL for Linux: Release 19.0.0.0.0 - Production on Wed May 28 21:31:15 2025
+Version 19.26.0.0.0
+
+Copyright (c) 1982, 2019, Oracle and/or its affiliates.  All rights reserved.
+
+Welcome to DGMGRL, type "help" for information.
+Connected to "cdbrac_db1"
+Connected as SYSDG.
+Database "cdbrac_db2" added
++ dgmgrl / 'show configuration'
+DGMGRL for Linux: Release 19.0.0.0.0 - Production on Wed May 28 21:31:24 2025
+Version 19.26.0.0.0
+
+Copyright (c) 1982, 2019, Oracle and/or its affiliates.  All rights reserved.
+
+Welcome to DGMGRL, type "help" for information.
+Connected to "cdbrac_db1"
+Connected as SYSDG.
+
+Configuration - cdbrac_dg
+
+  Protection Mode: MaxPerformance
+  Members:
+  cdbrac_db1 - Primary database
+    cdbrac_db2 - Physical standby database 
+
+Fast-Start Failover:  Disabled
+
+Configuration Status:
+DISABLED
+
++ dgmgrl / 'enable configuration'
+DGMGRL for Linux: Release 19.0.0.0.0 - Production on Wed May 28 21:31:24 2025
+Version 19.26.0.0.0
+
+Copyright (c) 1982, 2019, Oracle and/or its affiliates.  All rights reserved.
+
+Welcome to DGMGRL, type "help" for information.
+Connected to "cdbrac_db1"
+Connected as SYSDG.
+Enabled.
++ dgmgrl / 'show configuration'
+DGMGRL for Linux: Release 19.0.0.0.0 - Production on Wed May 28 21:31:45 2025
+Version 19.26.0.0.0
+
+Copyright (c) 1982, 2019, Oracle and/or its affiliates.  All rights reserved.
+
+Welcome to DGMGRL, type "help" for information.
+Connected to "cdbrac_db1"
+Connected as SYSDG.
+
+Configuration - cdbrac_dg
+
+  Protection Mode: MaxPerformance
+  Members:
+  cdbrac_db1 - Primary database
+    Warning: ORA-16905: The member was not enabled yet.
+
+    cdbrac_db2 - Physical standby database 
+      Error: ORA-16810: multiple errors or warnings detected for the member
+
+Fast-Start Failover:  Disabled
+
+Configuration Status:
+ERROR   (status updated 34 seconds ago)
+
+oracle@bol7rac1a> dgmgrl / "show configuration"
+DGMGRL for Linux: Release 19.0.0.0.0 - Production on Wed May 28 21:32:22 2025
+Version 19.26.0.0.0
+
+Copyright (c) 1982, 2019, Oracle and/or its affiliates.  All rights reserved.
+
+Welcome to DGMGRL, type "help" for information.
+Connected to "cdbrac_db1"
+Connected as SYSDG.
+
+Configuration - cdbrac_dg
+
+  Protection Mode: MaxPerformance
+  Members:
+  cdbrac_db1 - Primary database
+    Warning: ORA-16905: The member was not enabled yet.
+
+    cdbrac_db2 - Physical standby database 
+      Error: ORA-16810: multiple errors or warnings detected for the member
+
+Fast-Start Failover:  Disabled
+
+Configuration Status:
+ERROR   (status updated 71 seconds ago)
+```
+
+The last error occurs because the Data Guard Broker is not running. Usually it takes some minutes before the databases are in sync.
+
+```
+oracle@bol7rac1a> dgmgrl / "show configuration"
+DGMGRL for Linux: Release 19.0.0.0.0 - Production on Wed May 28 21:33:03 2025
+Version 19.26.0.0.0
+
+Copyright (c) 1982, 2019, Oracle and/or its affiliates.  All rights reserved.
+
+Welcome to DGMGRL, type "help" for information.
+Connected to "cdbrac_db1"
+Connected as SYSDG.
+
+Configuration - cdbrac_dg
+
+  Protection Mode: MaxPerformance
+  Members:
+  cdbrac_db1 - Primary database
+    cdbrac_db2 - Physical standby database 
+      Warning: ORA-16857: member disconnected from redo source for longer than specified threshold
+
+Fast-Start Failover:  Disabled
+
+Configuration Status:
+WARNING   (status updated 38 seconds ago)
+```
+
+We can speed up this process archiving the online redo logs on the primary database.
+```
+oracle@bol7rac1a> sqlplus / as sysdba
+...
+SQL> alter system archive log current;
+
+System altered.
+
+SQL> exit
+...
+
+oracle@bol7rac1a> dgmgrl / "show configuration"
+DGMGRL for Linux: Release 19.0.0.0.0 - Production on Wed May 28 21:33:50 2025
+Version 19.26.0.0.0
+
+Copyright (c) 1982, 2019, Oracle and/or its affiliates.  All rights reserved.
+
+Welcome to DGMGRL, type "help" for information.
+Connected to "cdbrac_db1"
+Connected as SYSDG.
+
+Configuration - cdbrac_dg
+
+  Protection Mode: MaxPerformance
+  Members:
+  cdbrac_db1 - Primary database
+    cdbrac_db2 - Physical standby database 
+
+Fast-Start Failover:  Disabled
+
+Configuration Status:
+SUCCESS   (status updated 28 seconds ago)
+
+oracle@bol7rac1a> 
 ```
 
 ### Set Up Max. Availability Protection Mode
@@ -572,8 +917,8 @@ dgmgrl / "show configuration"
 Run this commands in Data Guard Broker CLI:
 
 ```
-edit database cdbfa_db1 set property LogXptMode=sync;
-edit database cdbfa_db2 set property LogXptMode=sync;
+edit database cdbrac_db1 set property LogXptMode=sync;
+edit database cdbrac_db2 set property LogXptMode=sync;
 
 edit configuration set protection mode as maxavailability;
 
@@ -585,19 +930,67 @@ show configuration;
 Connect to the primary or standby database using listener. Don't use `dgmgrl /`, because the database needs to re-connect after restarting the local database.
 
 ```
-dgmgrl
-connect sys/oracle@rkol7db1/cdbfa_db1.world
+oracle@bol7rac1a> dgmgrl 
+...
+DGMGRL> connect sys@bscan1:1521/cdbrac_db1.world      
+Password:
+Connected to "cdbrac_db1"
+Connected as SYSDBA.
 ```
 
-Run some checks before starting switchover:
+Run some checks before starting switchover.
 
 ```
-validate static connect identifier for all
-show configuration lag
-show configuration
-````
+DGMGRL> validate static connect identifier for all;
+Oracle Clusterware on database "cdbrac_db1" is available for database restart.
 
-Run switchover:
+Oracle Clusterware on database "cdbrac_db2" is available for database restart.
+
+
+DGMGRL> show configuration;
+
+Configuration - cdbrac_dg
+
+  Protection Mode: MaxAvailability
+  Members:
+  cdbrac_db1 - Primary database
+    cdbrac_db2 - Physical standby database 
+
+Fast-Start Failover:  Disabled
+
+Configuration Status:
+SUCCESS   (status updated 26 seconds ago)
+
+DGMGRL> show configuration lag;
+
+Configuration - cdbrac_dg
+
+  Protection Mode: MaxAvailability
+  Members:
+  cdbrac_db1 - Primary database
+    cdbrac_db2 - Physical standby database 
+                 Transport Lag:      0 seconds (computed 0 seconds ago)
+                 Apply Lag:          0 seconds (computed 0 seconds ago)
+
+Fast-Start Failover:  Disabled
+
+Configuration Status:
+SUCCESS   (status updated 30 seconds ago)
 ```
-switchover to cdbfa_db2
+
+Run switchover.
+
 ```
+DGMGRL> switchover to cdbrac_db2;
+Performing switchover NOW, please wait...
+Operation requires a connection to database "cdbrac_db2"
+Connecting ...
+Connected to "cdbrac_db2"
+Connected as SYSDBA.
+New primary database "cdbrac_db2" is opening...
+Oracle Clusterware is restarting database "cdbrac_db1" ...
+Connected to "cdbrac_db1"
+Switchover succeeded, new primary is "cdbrac_db2"
+DGMGRL> 
+```
+
