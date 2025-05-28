@@ -3,7 +3,7 @@ title = 'How to Add a Standby RAC Database?'
 date = 2025-05-13T09:35:09+02:00
 draft = true
 summary = """
-There are diffent ways to create and use a standby database. This document describes creating a new standby RAC database using RMAN. The new standby database will be added to the Data Guard Broker configuration.
+There are different ways to create and use a standby database. This document describes creating a new standby RAC database using RMAN. The new standby database will be added to the Data Guard Broker configuration.
 """
 tags = ["rac", "standby", "rman", "data guard"]
 +++
@@ -11,7 +11,7 @@ tags = ["rac", "standby", "rman", "data guard"]
 
 The example commands use the following configuration.
 
-There are 2 RAC clusters consisting of the nodes *bol7rac1a*/*bol7rac1b* and *rkol7rac1a*/*rkol7rac1b*. The OS user "grid" was used to install the Grid Infrastructre. There are 2 ASM disk groups DATA and FRA on each cluster.
+There are 2 RAC clusters consisting of the nodes *bol7rac1a*/*bol7rac1b* and *rkol7rac1a*/*rkol7rac1b*. The OS user "grid" was used to install the Grid Infrastructure. There are 2 ASM disk groups DATA and FRA on each cluster.
 
 The RAC databases were installed using the OS user "oracle". The primary RAC database *cdbrac* runs on the servers *bol7rac1* and *bol7rac2* and uses ASM. The database unique name is *cdbrac_db1*. The database domain is *world*.
 
@@ -40,7 +40,7 @@ The standby database should run on the servers *rkol7rac1* and *rkol7rac2*. The 
 
 ### Set up Primary Database
 
-You have to enable **Archivelog** mode on the primary database. To avoid possible issues during standby recovery you have to set **Force Logging** as well. It's recommended to use **Flashback Database** especially on the standby database. 
+You have to enable **ARCHIVELOG** mode on the primary database. To avoid possible issues during standby recovery you have to set **Force Logging** as well. It's recommended to use **Flashback Database** especially on the standby database. 
 
 ```
 SQL> select log_mode, force_logging from v$database;
@@ -61,7 +61,7 @@ NO
 
 You can make these changes using the following statements.
 
-#### Restart the Database And Enable **Archivelog**
+#### Restart the Database And Enable **ARCHIVELOG**
 
 ```
 srvctl stop database -db cdbrac_db1
@@ -73,9 +73,11 @@ shutdown immediate
 exit
 
 srvctl start database -db cdbrac_db1
+```
 
 #### Enable **Force Logging** And **Flashback Database**
 
+```
 sqlplus / as sysdba
 alter database force logging;
 alter database flashback on;
@@ -100,9 +102,9 @@ standby database automatically:
     alter system set standby_file_management=auto;
 
 
-### Create Standby Logfiles
+### Create Standby Log Files
 
-You have to add standby logfiles to the primary database. Every thread should have one more standby logfile as online redo logfiles. The logfile size must be the same.
+You have to add standby log files to the primary database. Every thread should have one more standby log file as online redo log files. The log file size must be the same.
 
 #### Check Current Online Redo Logs
 
@@ -115,18 +117,18 @@ SQL> select thread# thr, group# grp, bytes from v$log order by 1,2;
 	 1	    2  209715200
 	 2	    3  209715200
 	 2	    4  209715200
-````
+```
 
-So we have 2 threads with 2 online redo logfiles in each. 
+So we have 2 threads with 2 online redo log files in each. 
 
-#### Adding Standby Redo Logs.
+#### Adding Standby Redo Logs
 
-Based on the output above we need to create 3 standby redo logfiles to each thread.
+Based on the output above we need to create 3 standby redo log files to each thread.
 
 > [!TIP]
-> Before adding new standby redo logfiles check the parameter *DB_RECOVERY_FILE_DEST_SIZE* and ASM disk groups for enough space. The standby redo logfiles could be very large.
+> Before adding new standby redo log files check the parameter *DB_RECOVERY_FILE_DEST_SIZE* and ASM disk groups for enough space. The standby redo log files could be very large.
 
-Adding standby logfiles to the 1. thread:
+Adding standby log files to the first thread:
 
 ```
 SQL> alter database add standby logfile thread 1 size 209715200;
@@ -144,7 +146,7 @@ SQL> r
 Database altered.
 ```
 
-Adding standby logfiles to the 2. thread:
+Adding standby log files to the second thread:
 ```
 SQL>  alter database add standby logfile thread 2 size 209715200;
 
@@ -161,8 +163,17 @@ SQL> r
 Database altered.
 ```
 
-Checking standby logfiles:
+Checking standby log files:
 ```
+SQL> select thread# thr, group# grp, bytes from v$log order by 1,2;
+
+       THR	  GRP	   BYTES
+---------- ---------- ----------
+	 1	    1  209715200
+	 1	    2  209715200
+	 2	    3  209715200
+	 2	    4  209715200
+
 SQL> select thread#, group#, bytes from v$standby_log order by 1, 2;
 
    THREAD#     GROUP#	   BYTES
@@ -178,122 +189,14 @@ SQL> select thread#, group#, bytes from v$standby_log order by 1, 2;
 ```
 
 > [!NOTE]
-> You can drop a standby logfile using one of the following SQL statements:
+> You can drop a standby log file using one of the following SQL statements:
 
 - `alter database drop standby logfile member 'LogfilePath'`
 - `alter database drop standby logfile group NN`
 
-### Network files:
+### INIT.ORA
 
-#### LISTENER.ORA
-
-Usually on RAC you don't have to add any entry. But this example is for
-the single instance database. If you don't have working *listener.ora* and
-*sqlnet.ora* files, you can create them using the **netca** utility:
-
-```
-oracle@rkol7db1> cd $ORACLE_HOME/network/admin
-
-oracle@rkol7db1> netca -silent -responsefile $ORACLE_HOME/assistants/netca/netca.rsp 
-
-Parsing command line arguments:
-    Parameter "silent" = true
-    Parameter "responsefile" = /u01/oracle/db19f/assistants/netca/netca.rsp
-Done parsing command line arguments.
-Oracle Net Services Configuration:
-Profile configuration complete.
-Oracle Net Listener Startup:
-    Running Listener Control: 
-      /u01/oracle/db19f/bin/lsnrctl start LISTENER
-    Listener Control complete.
-    Listener started successfully.
-Listener configuration complete.
-Oracle Net Services configuration successful. The exit code is 0
-```
-
-Now you should add the new entry using corresponing *ORACLE_SID*, 
-*ORACLE_HOME* and the database *GLOBAL_NAME* values to the 
-*listener.ora* file.
-
-```
-...
-SID_LIST_LISTENER =
-  (SID_LIST =
-    (SID_DESC =
-      (SID_NAME=cdbfa)
-      (ORACLE_HOME=/u01/oracle/db19f)
-      (GLOBAL_DBNAME=cdbfa_db1_DGMGRL.world)
-    )
-  )
-...
-```
-Use `lsnrctl reload` to load the new configuration to the listener. 
-
-You should use the *listener.ora* and *sqlnet.ora* on the primary database as 
-a template to create corresponding files on the standby database. 
-
-This is a *listener.ora* file on the new standby database host *rkol7db2*:
-
-```
-# listener.ora Network Configuration File: /u01/oracle/db19f/network/admin/listener.ora
-# Generated by Oracle configuration tools.
-
-LISTENER =
-  (DESCRIPTION_LIST =
-    (DESCRIPTION =
-      (ADDRESS = (PROTOCOL = TCP)(HOST = rkol7db2)(PORT = 1521))
-      (ADDRESS = (PROTOCOL = IPC)(KEY = EXTPROC1521))
-    )
-  )
-
-SID_LIST_LISTENER =
-  (SID_LIST =
-    (SID_DESC =
-      (SID_NAME=cdbfa)
-      (ORACLE_HOME=/u01/oracle/db19f)
-      (GLOBAL_DBNAME=cdbfa_db2_DGMGRL.world)
-    )
-  )
-
-```
-
-The differences to the primary database are:
-- Hostname *rkol7db2* instead of *rkol7db1*
-- Global database name *cdbfa_db2_DGMGRL.world* instead of *cdbfa_db1_DGMGRL.wolrd*
-
-You have to start or reload the listener on the standby database now.
-
-#### TNSNAMES.ORA
-
-We want to use RMAN to duplicate the primary database to the standby database. 
-We will add the corresponding RMAN TNS aliases to the *tnsnames.ora* file. 
-
-```
-cdbfa_db1_rman =
-  (DESCRIPTION =
-    (ADDRESS = (PROTOCOL=TCP)(HOST=rkol7db1)(PORT = 1521))
-    (CONNECT_DATA =
-      (SERVER = DEDICATED)
-      (SID = cdbfa)
-    )
-  )
-
-cdbfa_db2_rman =
-  (DESCRIPTION =
-    (ADDRESS = (PROTOCOL=TCP)(HOST=rkol7db2)(PORT = 1521))
-    (CONNECT_DATA =
-      (SERVER = DEDICATED)
-      (SID = cdbfa)
-    )
-  )
-
-```
-
-You should copy these TNS aliases to the standby database *tnsnames.ora* file.
-
-### INIT.ORA ###
-
-At first you should create a *PFILE* from the primary database *SPFILE*. You can use this file as a template for the standby database *PFILE*.
+The standby database parameters should be very similar to the database parameters on the primary database. You should use the *PFILE* of the primary database as a template for the standby database. 
 
 ```
 oracle@bol7rac1a> mkdir -p /home/oracle/tests/data_guard/primary
@@ -307,9 +210,9 @@ File created.
 
 ### Database Password File
 
-In RAC the password file is saved in ASM. You have to copy this file from the ASM to the local file system using *asmcmd*.
+The password file must be the same between the primary and standby databases. In RAC the password file is saved in ASM. You have to copy this file from the ASM to the local file system using *asmcmd*.
 
-At first you would run the following command as *oracle* OS user to get the ASM path of the database password file.
+At first, you would run the following command as *oracle* OS user to get the ASM path of the database password file.
 
 ```
 oracle@bol7rac1a> srvctl config database -db cdbrac_db1
@@ -328,9 +231,9 @@ grid@bol7rac1a> asmcmd cp +DATA/CDBRAC_DB1/PASSWORD/pwdcdbrac_db1.346.1201598869
 copying +DATA/CDBRAC_DB1/PASSWORD/pwdcdbrac_db1.346.1201598869 -> /home/grid/orapwdcdbrac
 ```
 
-### Clearing Logfiles In the Standby Database.
+### Clearing Log Files In the Standby Database
 
-Before starting the recovery apply on the standby database we would like to clear the online and standby logfiles on the newly created standby database. This would re-create them in ASM. We can generate the script for this taks on the primary database.
+Before starting the recovery apply on the standby database we would like to clear the online and standby log files on the newly created standby database. This would re-create them in ASM. We should generate the script for this task on the primary database.
 
 ```
 set echo on pagesi 1000 linesi 255 trimsp on
@@ -343,19 +246,22 @@ spool off
 
 The output will be written to the file *clear_logfiles.log*.
 
-### Copy Files to Standby.
+## Preparing the Standby Database
 
-On the host *rkol7db2*:  
+### Copy Files to Standby
+
+#### INIT.ORA And Clear Log Files Script
+
+As *oracle* OS user on the host *rkol7db1*:  
 
     oracle@rkol7db2> mkdir -p /home/oracle/tests/data_guard/standby
 
 
-You should now copy the following files to the standby server *rkol7db2* 
-directory */home/oracle/tests/data_guard/standby* from the current directory
-*/home/oracle/tests/data_guard/primary* on the primary server *rkol7db1*:
+You should now copy the following files to the standby server *rkol7db1* 
+directory */home/oracle/tests/data_guard/standby* from the directory
+*/home/oracle/tests/data_guard/primary* on the primary server *bol7db1*:
 
 - init.ora.primary
-- database password file from *$ORACLE_HOME/dbs*
 - clear_logfiles.log file with online and standby redo logs.
 
 ```
@@ -373,7 +279,9 @@ orapwcdbfa                                                        100% 2048     
 For RAC/ASM you could use *asmcmd cp* command to copy the password file 
 from ASM to the local file system.
 
+#### Database Password File
 
+As *grid* OS user 
 ## Create Standby Database
 
 Before doing the following steps, please check the environment variables 
