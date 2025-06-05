@@ -16,3 +16,7 @@ The *arutil* GitHub repository contains a command line utility for working with 
 - RAC_HOME/bin/srvctl status
 
 This utility is developed for DBAs. That's why this command should be executed by DBA's OS user account (*oracle*). The RAC environment (*ORACLE_HOME*, *PATH*, *LD_LIBRARY_PATH*) must be set before starting *ARUTIL*.
+
+
+- [List Command]({{< relref "list.md" >}})
+- [Service Command]({{< relref "service.md" >}})
