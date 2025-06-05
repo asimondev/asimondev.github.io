@@ -8,6 +8,5 @@ type = "docs"
 
 ## My Tools / Repositories on GitHub
 
+- [ARUTIL]({{< relref "arutil" >}})
 - [Oracle Scripts]({{< relref "oracle_scripts" >}})
-
-
