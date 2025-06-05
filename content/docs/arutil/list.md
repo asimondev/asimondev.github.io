@@ -10,7 +10,7 @@ Use `arutil list hosts` command to fetch the configuration details about host na
 - Public host names
 - Cluster VIPs 
 - Cluster networks
-- SCANs.
+- SCANs
 
 Example Output:
 ```
