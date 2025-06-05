@@ -1,7 +1,7 @@
 +++
 title = 'ARUTIL Service Command'
 date = 2025-06-05T13:17:44+02:00
-draft = true
+draft = false
 +++
 
 [Add Services](#add-database-services)  
