@@ -124,12 +124,14 @@ Here is the default *ARUTIL* configuration file with all default options:
 {
 "ignore_instance_name" : false,
 "ignore_instance_count" : false,
+"ignore_pdb_case" : false,
 "ignore_java_usage" : false
 }
 ```
 You could provide your own JSON configuration with the modified flags:
  - "ignore_instance_name" : **true** => Only the number of instances in preferred / available parameters must be equal
  - "ignore_instance_count" : **true** => At least one instance should be available in preferred / available parameters
+ - "ignore_pdb_case" : **true** => Ignore case in PDB name
  - "ignore_java_usage" : **true** => Ignore the difference for the parameter "Service uses Java"
 
 For instance, we would like to compare two databases with the similar services. But the instance names are different between these databases.
