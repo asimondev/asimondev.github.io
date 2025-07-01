@@ -431,13 +431,22 @@ grid@rkol7rac2a>
 
 ASM has created the file but could not register it in the cluster resources for the database. We can register it on our own as *oracle* OS user using the ASM file path from the *pwcopy* output:
 
+As *grid* OS user:
 ```
-srvctl modify database -db cdba02_dc2 -pwfile +data/cdba02_dc2/password/cdba02_dc2.orapw
+grid@rkol7rac2a> asmcmd ls -l +data/cdba02_dc2/password/
+Type      Redund  Striped  Time             Sys  Name
+PASSWORD  UNPROT  COARSE   JUL 01 12:00:00  N    cdba02_dc2.orapw => +DATA/CDBA02_DC2/PASSWORD/pwdcdba02_dc2.270.1205326127
+PASSWORD  UNPROT  COARSE   JUL 01 12:00:00  Y    pwdcdba02_dc2.270.1205326127
+```
+
+We need the file *pwdcdba02_dc2.270.1205326127* and not the alias. As *oracle* OS user:
+```
+oracle@rkol7rac2a> srvctl modify database -db cdba02_dc2 -pwfile +data/cdba02_dc2/password/pwdcdba02_dc2.270.1205326127
 ```
 
 ### Restore Primary Database To the Standby Database
 
-*Easy Connect Naming* allows us to run all commands without any new TNS aliases in the *tnsnames.ora*. The primary database runs on the RAC cluster with nodes *bol7rac1a* and *bol7rac1b*. We will use the VIP node on the first node for all restore tasks. We can find out the VIP node on the primary database using the following command:
+*Easy Connect Naming* allows us to run all commands without any new TNS aliases in the *tnsnames.ora*. The primary database runs on the RAC cluster with nodes *bol7rac2a* and *bol7rac2b*. We will use the VIP node on the first node for all restore tasks. We can find out the VIP node on the primary database using the following command:
 
 ```
 oracle@bol7rac1a> srvctl config vip -node bol7rac1a
