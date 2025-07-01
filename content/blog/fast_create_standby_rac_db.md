@@ -19,6 +19,7 @@ In my previous blog [How to Add a Standby RAC Database?]({{< relref "create_stan
 Specific topics compared to the previous blog:
 > [!NOTE]
 > - [Using a separate network for creating a new standby database](#using-second-network)
+> - [Optimizing RMAN Restore from Primary to Standby Database](#optimizing-rman-restore-from-primary-to-standby-database)
 
 
 ```
@@ -444,65 +445,184 @@ We need the file *pwdcdba02_dc2.270.1205326127* and not the alias. As *oracle* O
 oracle@rkol7rac2a> srvctl modify database -db cdba02_dc2 -pwfile +data/cdba02_dc2/password/pwdcdba02_dc2.270.1205326127
 ```
 
-### Restore Primary Database To the Standby Database
+### Optimizing RMAN Restore from Primary to Standby Database
 
-*Easy Connect Naming* allows us to run all commands without any new TNS aliases in the *tnsnames.ora*. The primary database runs on the RAC cluster with nodes *bol7rac2a* and *bol7rac2b*. We will use the VIP node on the first node for all restore tasks. We can find out the VIP node on the primary database using the following command:
+Instead of using RMAN backups we want to use the RMAN feature [Restoring and Recovering Files Over the Network](https://docs.oracle.com/en/database/oracle/oracle-database/19/bradv/rman-recovery-advanced.html#GUID-8E64485B-3788-4389-A892-8C560F12443F). 
+
+We assume that the primary database is large. Your network must be fast for the following steps. (If not you can use the *RESTORE* commands from my previous blog [How to Add a Standby RAC Database?]({{< relref "create_standby_rac_db.md" >}})). 
+
+If you run the RMAN command from just one node, that node can use the SCAN name to fetch data from all source nodes. However, if your network is fast, this single target node running RMAN may become a performance bottleneck. In such cases, it's better to both read and write RMAN data using all RAC nodes in parallel.
+
+We want to use the RMAN command *ALLOCATE CHANNEL* to allocate different RMAN channels to different RAC nodes. But in this case we have to specify connect string (user, password and TNS-alias). You should not save any password in the files, so we are going to use [Oracle Secure External Password Store for Password Credentials](https://docs.oracle.com/en/database/oracle/oracle-database/19/dbseg/configuring-authentication.html#GUID-3EA07020-A9F3-4FF9-9518-E1AEA3BDDBBE). 
+
+The path to the Secure External Password Store (SEPS) will be specified in *sqlnet.ora*. We are going to set the TNS_ADMIN for this RAC database to use our own network configuration instead of the default *$ORACLE_HOME/network/admin* files.
+
+#### Set TNS_ADMIN
+
+For our tests we would create new files *sqlnet.ora* and *tnsnames.ora*. We can place them in the directory */u01/oracle/net* on every node.
+
+sqlnet.ora
+```
+sqlnet.wallet_override = true
+wallet_location =
+  (source =
+    (method = file)
+    (method_data =
+      (directory = /u01/oracle/wallets/cdba02_dc2)
+    )
+  )
+```
+
+tnsnames.ora
+```
+cdba02_dc2_instance1 =
+  (description=
+    (address=(protocol=tcp)(host=rkol7rac2av8)(port=1522))
+    (connect_data=(server=dedicated)(service_name=cdba02_dc2.world))
+  )
+cdba02_dc2_instance2 =
+  (description=
+    (address=(protocol=tcp)(host=rkol7rac2bv8)(port=1522))
+    (connect_data=(server=dedicated)(service_name=cdba02_dc2.world))
+  )
+```
+
+These are net service names for the local standby database. All of them use the second network (Data Guard / Backup network). We use the corresponding VIPs with the port number for the Data Guard database listener.
+
+We have created these files on the first node. Now we have to copy them to another node:
+```
+oracle@rkol7rac2a> ssh rkol7rac2b mkdir -p /u01/oracle/net
+oracle@rkol7rac2a> cd /u01/oracle/net
+oracle@rkol7rac2a> scp * rkol7rac2b:$PWD
+sqlnet.ora                                    100%  160   189.3KB/s   00:00    
+tnsnames.ora                                  100%  368   615.8KB/s   00:00    
 
 ```
-oracle@bol7rac1a> srvctl config vip -node bol7rac1a
-VIP exists: network number 1, hosting node bol7rac1a
-VIP Name: bol7rac1av
-VIP IPv4 Address: 192.168.5.32
-VIP IPv6 Address: 
-VIP is enabled.
-VIP is individually enabled on nodes: 
-VIP is individually disabled on nodes: 
-oracle@bol7rac1a> 
+
+We want to make sure, that the standby database is aware about the *TNS_ADMIN* environment variable. We are going to set in the database cluster resources:
+```
+oracle@rkol7rac2a> srvctl setenv database -db cdba02_dc2 -env "TNS_ADMIN=/u01/oracle/net"
+oracle@rkol7rac2a> srvctl getenv database -db cdba02_dc2
+cdba02_dc2:
+TNS_ADMIN=/u01/oracle/net
+oracle@rkol7rac2a> 
 ```
 
-The VIP name is *bol7rac1av*.
+#### Create Secure External Password Store
 
-We will use RMAN feature *"Restoring Data Files Over the Network"* for the
-RMAN RESTORE. In this case we don't have to customize any database network files.
+The path to the new Secure External Password Store (SEPS) is already specified in the *sqlnet.ora* file. We are going to use the following commands:
+```
+mkstore -wrl /u01/oracle/wallets/cdba02_dc2 -create
+mkstore -wrl /u01/oracle/wallets/cdba02_dc2 -createCredential ConnectString User Password
+```
+
+The wallet must be created on both standby nodes. We can repeat these steps on both nodes or just use a script.
+```
+oracle@rkol7rac2a> cat create_wallet.sh 
+#!/usr/bin/bash 
+
+WALLET_DIR=/u01/oracle/wallets/cdba02_dc2
+WALLET_PASSWORD=OracleSEPS4321
+SYS_PASSWORD=oracle
+
+echo "Creating wallet directories..."
+
+for host in rkol7rac2a rkol7rac2b ; do
+  echo "Host: $host"
+#  ssh $host rm -rf $WALLET_DIR
+  ssh $host mkdir -p $WALLET_DIR
+done
+
+echo "Creating wallet on the local wallet..."
+mkstore -wrl $WALLET_DIR -create <<ENDE
+$WALLET_PASSWORD
+$WALLET_PASSWORD
+ENDE
+
+echo "Adding credential to the local wallet..."
+echo "$WALLET_PASSWORD" | mkstore -wrl $WALLET_DIR -createCredential cdba02_dc1_instance1 sys $SYS_PASSWORD
+echo "$WALLET_PASSWORD" | mkstore -wrl $WALLET_DIR -createCredential cdba02_dc1_instance2 sys $SYS_PASSWORD
+
+
+echo "List local wallet credentials..."
+echo "$WALLET_PASSWORD" | mkstore -wrl $WALLET_DIR -listCredential 
+
+echo "Copy wallet to another node..."
+for host in rkol7rac2b ; do
+  echo "Host: $host"
+  scp -r $WALLET_DIR/* $host:$WALLET_DIR
+done
+```
+
+Now we can execute the script to create SEPS on both nodes.
 
 #### Restore Control Files
 
-Create standby control files with RMAN using service:
+At first, we are going to restore the standby control file using the primary database. We will use SCAN name on the second network (Data Guard Network) with the corresponding SCAN listener port 1522.
+
 
 ```
-oracle@rkol7rac1a> cat restore_cf.rman 
+oracle@rkol7rac2a> cat restore_cf.rman 
 connect target /
-restore standby controlfile from service 'bol7rac1av/cdbrac_db1.world';
+restore standby controlfile from service 'bscan2-dg:1522/cdba02_dc1.world';
 exit;
-oracle@rkol7rac1a> rman @restore_cf.rman
 
-Recovery Manager: Release 19.0.0.0.0 - Production on Wed May 28 20:58:29 2025
+oracle@rkol7rac2a> export ORACLE_SID=cdba021
+
+oracle@rkol7rac2a> sqlplus / as sysdba                            
+
+SQL*Plus: Release 19.0.0.0.0 - Production on Tue Jul 1 23:17:23 2025
+Version 19.26.0.0.0
+
+Copyright (c) 1982, 2024, Oracle.  All rights reserved.
+
+Connected to an idle instance.
+
+SQL> startup nomount
+ORACLE instance started.
+
+Total System Global Area 8589933432 bytes
+Fixed Size		    9198456 bytes
+Variable Size		 1426063360 bytes
+Database Buffers	 7147094016 bytes
+Redo Buffers		    7577600 bytes
+SQL> exit
+Disconnected from Oracle Database 19c Enterprise Edition Release 19.0.0.0.0 - Production
+Version 19.26.0.0.0
+
+oracle@rkol7rac2a> rman @restore_cf.rman
+
+Recovery Manager: Release 19.0.0.0.0 - Production on Tue Jul 1 23:22:17 2025
 Version 19.26.0.0.0
 
 Copyright (c) 1982, 2019, Oracle and/or its affiliates.  All rights reserved.
 
 RMAN> connect target *
-2> restore standby controlfile from service 'bol7rac1av/cdbrac_db1.world';
+2> restore standby controlfile from service 'bscan2-dg:1522/cdba02_dc1.world';
 3> exit;
-connected to target database: CDBRAC (not mounted)
+connected to target database: CDBA02 (not mounted)
 
-Starting restore at 28-MAY-25
+Starting restore at 01-JUL-25
 using target database control file instead of recovery catalog
 allocated channel: ORA_DISK_1
-channel ORA_DISK_1: SID=393 instance=cdbrac1 device type=DISK
-...
-output file name=+DATA/CDBRAC_DB2/CONTROLFILE/current.398.1202331513
-output file name=+FRA/CDBRAC_DB2/CONTROLFILE/current.692.1202331515
-Finished restore at 28-MAY-25
+channel ORA_DISK_1: SID=18 instance=cdba021 device type=DISK
+
+channel ORA_DISK_1: starting datafile backup set restore
+channel ORA_DISK_1: using network backup set from service bscan2-dg:1522/cdba02_dc1.world
+channel ORA_DISK_1: restoring control file
+channel ORA_DISK_1: restore complete, elapsed time: 00:01:01
+output file name=+DATA/CDBA02_DC2/CONTROLFILE/current.300.1205364381
+output file name=+FRA/CDBA02_DC2/CONTROLFILE/current.266.1205364381
+Finished restore at 01-JUL-25
 
 Recovery Manager complete.
-oracle@rkol7rac1a> 
+oracle@rkol7rac2a> 
 ```
 
 #### Mount Standby Database
 
 ```
-oracle@rkol7rac1a> sqlplus / as sysdba
+oracle@rkol7rac2a> sqlplus / as sysdba
 ...
 
 SQL> alter database mount;
@@ -512,9 +632,32 @@ Database altered.
 SQL> exit
 ```
 
+#### Change Snapshot Controlfile Location
+
+The restored control file contains RMAN configuration from the primary database. At least the snapshot control file location must be changed.
+
+```
+racle@rkol7rac2a> rman target /
+
+Recovery Manager: Release 19.0.0.0.0 - Production on Tue Jul 1 23:30:41 2025
+Version 19.26.0.0.0
+
+Copyright (c) 1982, 2019, Oracle and/or its affiliates.  All rights reserved.
+
+connected to target database: CDBA02 (DBID=2429009365, not open)
+
+RMAN> show all;
+...
+RMAN> CONFIGURE SNAPSHOT CONTROLFILE NAME TO '+fra/cdba02_dc2/snapshot.cf';
+CONFIGURE SNAPSHOT CONTROLFILE NAME TO '+fra/cdba02_dc2/snapshot.cf';
+new RMAN configuration parameters:
+CONFIGURE SNAPSHOT CONTROLFILE NAME TO '+fra/cdba02_dc2/snapshot.cf';
+new RMAN configuration parameters are successfully stored
+```
+
 #### Restore Database
 
-Restore database with RMAN using service:
+Now we can restore the primary database using all channels on both nodes.
 
 ```
 oracle@rkol7rac1a> cat restore_db.rman 
