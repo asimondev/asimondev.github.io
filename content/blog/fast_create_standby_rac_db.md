@@ -318,11 +318,6 @@ As *grid* OS user copy password file from *bol7rac2a* to *rkol7rac2a*:
 grid@bol7rac2a> scp cdba02_dc2.orapw rkol7rac2a:
 ```
 
-### Create Standby Database
-
-Before doing the following steps, please check the environment variables 
-ORACLE_HOME and ORACLE_BASE. 
-
 ### Prepare INIT.ORA
 
 On the server *rkol7rac2a*:  
@@ -354,6 +349,11 @@ Please create directory for *AUDIT_FILE_DEST* on each server.
 oracle@rkol7rac2a> mkdir -p /u01/oracle/admin/cdba02_dc2/adump
 oracle@rkol7rac2a> ssh rkol7rac2b mkdir -p /u01/oracle/admin/cdba02_dc2/adump
 ```
+
+## Create Standby Database
+
+Before doing the following steps, please check the environment variables 
+ORACLE_HOME and ORACLE_BASE. 
 
 ### Create Cluster Resources for Standby Database
 
@@ -460,6 +460,64 @@ We want to use the RMAN command *ALLOCATE CHANNEL* to allocate different RMAN ch
 
 The path to the Secure External Password Store (SEPS) will be specified in *sqlnet.ora*. We are going to set the TNS_ADMIN for this RAC database to use our own network configuration instead of the default *$ORACLE_HOME/network/admin* files.
 
+#### Restore Control Files
+
+At first, we are going to restore the standby control file using the primary database. We will use SCAN name on the second network (Data Guard Network) with the corresponding SCAN listener port 1522.
+
+Start up the standby database and don't mount it.
+
+```
+oracle@rkol7rac2a> sqlplus / as sysdba
+...
+SQL> startup nomount
+ORACLE instance started.
+
+Total System Global Area 8589933432 bytes
+Fixed Size		    9198456 bytes
+Variable Size		 1426063360 bytes
+Database Buffers	 7147094016 bytes
+Redo Buffers		    7577600 bytes
+SQL> exit
+Disconnected from Oracle Database 19c Enterprise Edition Release 19.0.0.0.0 - Production
+Version 19.26.0.0.0
+```
+
+Create standby control file using the primary database control file:
+```
+oracle@rkol7rac2a> cat restore_cf.rman 
+connect target /
+restore standby controlfile from service 'bscan2-dg:1522/cdba02_dc1.world';
+exit;
+
+oracle@rkol7rac2a> rman @restore_cf.rman
+
+Recovery Manager: Release 19.0.0.0.0 - Production on Wed Jul 2 16:32:25 2025
+Version 19.26.0.0.0
+
+Copyright (c) 1982, 2019, Oracle and/or its affiliates.  All rights reserved.
+
+RMAN> connect target *
+2> restore standby controlfile from service 'bscan2-dg:1522/cdba02_dc1.world';
+3> exit;
+connected to target database: CDBA02 (not mounted)
+
+Starting restore at 02-JUL-25
+using target database control file instead of recovery catalog
+allocated channel: ORA_DISK_1
+channel ORA_DISK_1: SID=16 instance=cdba021 device type=DISK
+
+channel ORA_DISK_1: starting datafile backup set restore
+channel ORA_DISK_1: using network backup set from service bscan2-dg:1522/cdba02_dc1.world
+channel ORA_DISK_1: restoring control file
+channel ORA_DISK_1: restore complete, elapsed time: 00:00:02
+output file name=+DATA/CDBA02_DC2/CONTROLFILE/current.270.1205425949
+output file name=+FRA/CDBA02_DC2/CONTROLFILE/current.266.1205425949
+Finished restore at 02-JUL-25
+
+Recovery Manager complete.
+oracle@rkol7rac2a> 
+```
+
 #### Set TNS_ADMIN
 
 For our tests we would create new files *sqlnet.ora* and *tnsnames.ora*. We can place them in the directory */u01/oracle/net* on every node.
@@ -500,15 +558,6 @@ oracle@rkol7rac2a> scp * rkol7rac2b:$PWD
 sqlnet.ora                                    100%  160   189.3KB/s   00:00    
 tnsnames.ora                                  100%  368   615.8KB/s   00:00    
 
-```
-
-We want to make sure, that the standby database is aware about the *TNS_ADMIN* environment variable. We are going to set in the database cluster resources:
-```
-oracle@rkol7rac2a> srvctl setenv database -db cdba02_dc2 -env "TNS_ADMIN=/u01/oracle/net"
-oracle@rkol7rac2a> srvctl getenv database -db cdba02_dc2
-cdba02_dc2:
-TNS_ADMIN=/u01/oracle/net
-oracle@rkol7rac2a> 
 ```
 
 #### Create Secure External Password Store
@@ -559,58 +608,6 @@ done
 
 Now we can execute the script to create SEPS on both nodes.
 
-#### Restore Control Files
-
-At first, we are going to restore the standby control file using the primary database. We will use SCAN name on the second network (Data Guard Network) with the corresponding SCAN listener port 1522.
-
-```
-oracle@rkol7rac2a> sqlplus / as sysdba
-...
-SQL> startup nomount
-ORACLE instance started.
-
-Total System Global Area 8589933432 bytes
-Fixed Size		    9198456 bytes
-Variable Size		 1426063360 bytes
-Database Buffers	 7147094016 bytes
-Redo Buffers		    7577600 bytes
-SQL> exit
-Disconnected from Oracle Database 19c Enterprise Edition Release 19.0.0.0.0 - Production
-Version 19.26.0.0.0
-
-oracle@rkol7rac2a> cat restore_cf.rman 
-connect target /
-restore standby controlfile from service 'bscan2-dg:1522/cdba02_dc1.world';
-exit;
-
-oracle@rkol7rac2a> rman @restore_cf.rman
-
-Recovery Manager: Release 19.0.0.0.0 - Production on Wed Jul 2 16:32:25 2025
-Version 19.26.0.0.0
-
-Copyright (c) 1982, 2019, Oracle and/or its affiliates.  All rights reserved.
-
-RMAN> connect target *
-2> restore standby controlfile from service 'bscan2-dg:1522/cdba02_dc1.world';
-3> exit;
-connected to target database: CDBA02 (not mounted)
-
-Starting restore at 02-JUL-25
-using target database control file instead of recovery catalog
-allocated channel: ORA_DISK_1
-channel ORA_DISK_1: SID=16 instance=cdba021 device type=DISK
-
-channel ORA_DISK_1: starting datafile backup set restore
-channel ORA_DISK_1: using network backup set from service bscan2-dg:1522/cdba02_dc1.world
-channel ORA_DISK_1: restoring control file
-channel ORA_DISK_1: restore complete, elapsed time: 00:00:02
-output file name=+DATA/CDBA02_DC2/CONTROLFILE/current.270.1205425949
-output file name=+FRA/CDBA02_DC2/CONTROLFILE/current.266.1205425949
-Finished restore at 02-JUL-25
-
-Recovery Manager complete.
-oracle@rkol7rac2a> 
-```
 
 #### Mount Standby Database
 
@@ -635,10 +632,16 @@ OK (0 msec)
 
 ```
 
-Shut down the local instance. Start all instances and mount the database.
+Shut down the local instance.
 ```
-oracle@rkol7rac2a> srvctl stop database -db cdba02_dc2 -stopoption abort 
+sqlplus / as sysdba
+...
+SQL> shutdown abort
+ORACLE instance shut down.
+```
 
+Start all instances and mount the database.
+```
 oracle@rkol7rac2a> srvctl start database -db cdba02_dc2 -startoption mount
 
 oracle@rkol7rac2a> srvctl status database -db cdba02_dc2
@@ -850,6 +853,8 @@ allocated channel: d4
 channel d4: SID=269 instance=cdba022 device type=DISK <== Instance 2
 
 ```
+
+Now we can unset TNS_ADMIN variable: `unset TNS_ADMIN`
 
 ####  Rolling Forward a Physical Standby Database
 
