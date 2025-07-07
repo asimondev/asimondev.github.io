@@ -640,7 +640,7 @@ SQL> shutdown abort
 ORACLE instance shut down.
 ```
 
-Start all instances and mount the database.
+Start all RAC instances. We have restored the standby control file, so that we can use *-startoption mount* to mount the database.
 ```
 oracle@rkol7rac2a> srvctl start database -db cdba02_dc2 -startoption mount
 
@@ -652,7 +652,7 @@ Instance cdba022 is running on node rkol7rac2b
 
 #### Change Snapshot Controlfile Location
 
-The restored control file contains RMAN configuration from the primary database. At least the snapshot control file location must be changed.
+The restored control file contains RMAN configuration from the primary database. At least the snapshot control file location must be changed. You should check other parameters using *show all* RMAN command.
 
 ```
 racle@rkol7rac2a> rman target /
@@ -757,6 +757,13 @@ SQL> exit
 #### Restore Database
 
 Now we can restore the primary database using all channels on both nodes.
+
+> [!TIP]
+> Don't forget to set NLS_DATE_FORMAT before starting RMAN. This would set RMAN date format for RMAN job output:\
+> `export NLS_DATE_FORMAT="dd-mon-yy hh24:mi:ss"`
+
+> [!TIP]
+> Use RMAN *SET COMMAND ID TO 'text' to set the string into the V$SESSION.CLIENT_INFO column of all channels. You could use this information to determine which database server sessions correspond to which RMAN channels.
 
 ```
 oracle@rkol7rac2a> cat restore_db.rman 
