@@ -769,6 +769,10 @@ Now we can restore the primary database using all channels on both nodes.
 oracle@rkol7rac2a> cat restore_db.rman 
 connect target /
 run {
+
+# Set V$SESION.CLIENT_INFO column
+  set command id to 'RESTORE CDBA02_DC2';
+
 # 2 channels from the first node
   allocate channel d1 device type disk connect "/@cdba02_dc2_instance1 as sysdba";
   allocate channel d2 device type disk connect "/@cdba02_dc2_instance1 as sysdba";
@@ -783,6 +787,7 @@ run {
     section size 64G;
 }
 exit
+oracle@rkol7rac2a> 
 ```
 
 The restore would take some time. Usually we would start such RMAN restore operation using UNIX *nohup* command.
@@ -791,35 +796,24 @@ The restore would take some time. Usually we would start such RMAN restore opera
 oracle@rkol7rac2a> nohup rman @restore_db.rman &
 [1] 18196
 oracle@rkol7rac2a> nohup: ignoring input and appending output to 'nohup.out'
-
-oracle@rkol7rac2a> tail -f nohup.out 
-Recovery Manager: Release 19.0.0.0.0 - Production on Wed Jul 2 16:52:55 2025
-Version 19.26.0.0.0
-
-Copyright (c) 1982, 2019, Oracle and/or its affiliates.  All rights reserved.
-
-RMAN> connect target *
 ...
-using target database control file instead of recovery catalog
-allocated channel: d1
-channel d1: SID=393 instance=cdba021 device type=DISK
-
-allocated channel: d2
-channel d2: SID=145 instance=cdba021 device type=DISK
+oracle@rkol7rac2a> tail -f nohup.out
+channel d2: SID=146 instance=cdba021 device type=DISK
 
 allocated channel: d3
-channel d3: SID=143 instance=cdba022 device type=DISK
+channel d3: SID=274 instance=cdba022 device type=DISK
 
 allocated channel: d4
-channel d4: SID=269 instance=cdba022 device type=DISK
+channel d4: SID=397 instance=cdba022 device type=DISK
 
-Starting restore at 02-JUL-25
-Starting implicit crosscheck backup at 02-JUL-25
+Starting restore at 07-jul-25 21:09:22
+Starting implicit crosscheck backup at 07-jul-25 21:09:22
 Crosschecked 1 objects
-Finished implicit crosscheck backup at 02-JUL-25
+Crosschecked 1 objects
+Finished implicit crosscheck backup at 07-jul-25 21:09:22
 
-Starting implicit crosscheck copy at 02-JUL-25
-Finished implicit crosscheck copy at 02-JUL-25
+Starting implicit crosscheck copy at 07-jul-25 21:09:22
+Finished implicit crosscheck copy at 07-jul-25 21:09:22
 
 searching for all files in the recovery area
 cataloging files...
@@ -829,20 +823,22 @@ no files cataloged
 channel d1: starting datafile backup set restore
 channel d1: using network backup set from service bscan2-dg:1522/cdba02_dc1.world
 channel d1: specifying datafile(s) to restore from backup set
-channel d1: restoring datafile 00001 to +DATA/CDBA02_DC1/DATAFILE/system.285.1205174517
+channel d1: restoring datafile 00001 to +DATA/CDBA02_DC2/DATAFILE/system.291.1205874565
+channel d1: restoring section 1 of 1
+channel d2: starting datafile backup set restore
 ...
-channel d3: restore complete, elapsed time: 00:00:01
-channel d2: restore complete, elapsed time: 00:00:26
-channel d4: restore complete, elapsed time: 00:00:07
-channel d1: restore complete, elapsed time: 00:00:34
-Finished restore at 02-JUL-25
+channel d4: restoring section 1 of 1
+channel d3: restore complete, elapsed time: 00:00:02
+channel d4: restore complete, elapsed time: 00:00:02
+channel d1: restore complete, elapsed time: 00:00:08
+channel d2: restore complete, elapsed time: 00:00:08
+Finished restore at 07-jul-25 21:10:09
 released channel: d1
 released channel: d2
 released channel: d3
 released channel: d4
 
 Recovery Manager complete.
-oracle@rkol7rac2a> 
 ```
 
 The restore performance and network load depend on the number of allocated channels, RAC nodes and the value of *SECTION SIZE* parameter. The channel allocation output confirmed, that we have used both instances for restore:
