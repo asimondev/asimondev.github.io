@@ -1,5 +1,5 @@
 +++
-title = 'How To Add a Large Standby Databse Fast'
+title = 'How To Add a Large Standby Database Fast'
 date = 2025-06-30T18:45:35+02:00
 draft = false
 summary = """
