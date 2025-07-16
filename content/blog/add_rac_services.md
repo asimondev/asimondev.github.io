@@ -228,8 +228,7 @@ Service read_only.world is running on instance(s) cdba021
 oracle@rkol7rac2a> 
 ```
 
-All services are running. But the service *
-prod.world* should only run on the primary database!
+We didn't start any services. But we have opened the database for read only. This triggered starting the services. All services are running. But the service *prod.world* should only run on the primary database!
 
 We can restart the database and check the services. This time we would use the *startoption* "read only" instead of the usual "mount" option.
 
