@@ -104,6 +104,9 @@ oracle@bol7rac2a>
 
 All services are now running as expected.
 
+> [!TIP]
+> Do not manually start all services on the primary database. Start only services with *-role PRIMARY* option to avoid issues with standby service sessions running on the primary database.
+
 ## Creating Services on the Standby Database
 
 Now we have to create the same services on the standby database. Don't forget to use the correct database unique name!
@@ -245,6 +248,31 @@ oracle@rkol7rac2a>
 ```
 
 With that, all services are now operating properly.
+
+> [!IMPORTANT]
+> If you have already prepared and distributed the *tnsnames.ora* file to the clients, starting all new services on the standby database could cause a problem. The new client session could start to connect to one of the read only services on the standby database. Make sure to only start the services with *-role "PHYSICAL_STANDBY"* on the standby database.
+
+## Managed Start of Standby Services
+
+Use one of these options to avoid erroneous session connects to the new services on the standby database.
+
+### Standby Database Started with Mount Option
+
+You have started the standby database with *-startoption mount* option. The services can't run on a mounted database. You have to open the database to run the services:
+
+- Start the standby database with *"mount"* option
+- Add all services 
+- Do not open the database!
+- Stop the standby database
+- Start the standby database with *"read only"* start option
+
+### Standby Database Started with Read Only Option
+
+All new created services can be started immediately. Do it manually:
+
+- Start the standby database with *"read only"* option
+- Add all services 
+- Start manually only services with a *physical standby* role.
 
 ## Data Guard Switchover
 
