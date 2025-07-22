@@ -1,7 +1,7 @@
 +++
 title = 'Managing PDBs in Data Guard Broker / RAC Environment'
 date = 2025-07-22T20:46:09+02:00
-draft = true
+draft = false
 summary = """
 Using Data Guard Broker in RAC environment is not difficult. But the Multitenant Architecture adds more complexity. This blog describes how to manage RAC services with PDBs in Data Guard environment.
 """
