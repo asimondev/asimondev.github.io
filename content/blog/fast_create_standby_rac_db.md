@@ -388,8 +388,7 @@ oracle@rkol7rac2a> bash -x ./add_db.sh
 
 ### Create SPFILE
 
-You can start now the new instance in the *NOMOUNT* mode and create a new
-*SPFILE* using the *init.ora.standby* file.
+You can start now the new instance in the *NOMOUNT* mode and create a new *SPFILE* using the *init.ora.standby* file.
 
 ```
 oracle@rkol7rac2a> export ORACLE_SID=cdba021

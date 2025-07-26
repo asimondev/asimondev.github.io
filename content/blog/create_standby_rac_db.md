@@ -287,6 +287,38 @@ grid@bol7rac1a>
 Before doing the following steps, please check the environment variables 
 ORACLE_HOME and ORACLE_BASE. 
 
+### Create Cluster Resources for Standby Database
+
+Using the output from `srvctl config database -db cdbrac_db1` on the primary database we can create the cluster resources for the new standby database. We will place all commands in the shell script *add_db.sh*.
+
+```
+oracle@rkol7rac1a> cat add_db.sh 
+#!/bin/bash
+
+DB_NAME=cdbrac
+DB_UNIQUE_NAME=cdbrac_db2
+
+srvctl add database -db $DB_UNIQUE_NAME -dbname $DB_NAME \
+  -oraclehome /u01/oracle/rac19c \
+  -domain world \
+  -dbtype RAC -role PHYSICAL_STANDBY \
+  -diskgroup data,fra
+  
+srvctl add instance -db $DB_UNIQUE_NAME -instance cdbrac1 -node rkol7rac1a
+srvctl add instance -db $DB_UNIQUE_NAME -instance cdbrac2 -node rkol7rac1b
+```
+
+Run this script:
+
+```
+oracle@rkol7rac1a> bash -x ./add_db.sh 
++ DB_NAME=cdbrac
++ DB_UNIQUE_NAME=cdbrac_db2
++ srvctl add database -db cdbrac_db2 -dbname cdbrac -oraclehome /u01/oracle/rac19c -domain world -dbtype RAC -role PHYSICAL_STANDBY -diskgroup data,fra
++ srvctl add instance -db cdbrac_db2 -instance cdbrac1 -node rkol7rac1a
++ srvctl add instance -db cdbrac_db2 -instance cdbrac2 -node rkol7rac1b
+```
+
 ### Prepare INIT.ORA
 
 On the server *rkol7rac1a*:  
@@ -322,8 +354,7 @@ oracle@rkol7rac1a>
 
 ### Create SPFILE
 
-You can start now the new instance in the *NOMOUNT* mode and create a new
-*SPFILE* using the *init.ora.standby* file.
+You can start now the new instance in the *NOMOUNT* mode and create a new *SPFILE* using the *init.ora.standby* file.
 
 
 ```
@@ -342,7 +373,7 @@ ORACLE instance shut down.
 ...
 ```
 
-As *grid* OS user check the *SPFILE* name in ASM.
+Check the *SPFILE* output in *srvctl config database -db cdbrac_db2* command. Usually it should be set. If not, as *grid* OS user check the *SPFILE* name in ASM.
 
 ```
 grid@rkol7rac1a> asmcmd
@@ -355,58 +386,37 @@ ASMCMD>
 
 We will use the full path for *SPFILE* for the *SRVCTL ADD DATABASE* in the next step.
 
+```
+oracle@rkol7rac2a> srvctl modify database -db cdbrac_db2 -spfile +DATA/DB_UNKNOWN/PASSWORD/pwddb_unknown.397.1202329809
+```
+
 ### Copy Database Password File
 
 As *grid* OS user copy database password file to ASM disk group.
 
 ```
-grid@rkol7rac1a> asmcmd
-ASMCMD> cp /home/grid/orapwdcdbrac +DATA/CDBRAC_DB2/
-copying /home/grid/orapwdcdbrac -> +DATA/CDBRAC_DB2/orapwdcdbrac
-ASMCMD> ls -l +DATA/CDBRAC_DB2/orapwdcdbrac
+asmcmd pwcopy /home/grid/orapwdcdbrac +data/cdbrac_db2/password/cdbrac_db2.orapw --dbuniquename cdbrac_db2
+```
+
+*pwcopy* has copied the file but could not register it in the cluster resources for the database. 
+```
+copying /home/grid/orapwdcdbrac -> +data/cdbrac_db2/password/cdbrac_db2.orapw
+ASMCMD-9453: failed to register password file as a CRS resource
+grid@rkol7rac2a> 
+```
+We can register it on our own as *oracle* OS user using the ASM file path from the *pwcopy* output:
+
+As *grid* OS user:
+```
+grid@rkol7rac2a> asmcmd ls -l +data/cdbrac_db2/password/
 Type      Redund  Striped  Time             Sys  Name
-PASSWORD  UNPROT  COARSE   MAY 28 20:00:00  N    orapwdcdbrac => +DATA/DB_UNKNOWN/PASSWORD/pwddb_unknown.397.1202329809
-ASMCMD> quit
+PASSWORD  UNPROT  COARSE   JUL 01 12:00:00  N    cdbrac_db2.orapw => +DATA/CDBRAC_DB2/PASSWORD/pwdcdbrac_db2.270.1205326127
+PASSWORD  UNPROT  COARSE   JUL 01 12:00:00  Y    pwdcdbrac_db2.270.1205326127
 ```
 
-ASM has created an alias name for the database password file. We will use the full path for the *SRVCTL ADD DATABASE* in the next step.
-
-### Create Cluster Resources for Standby Database
-
-Using the output from `srvctl config database -db cdbrac_db1` on the primary database we can create the cluster resources for the new standby database. We will place all commands in the shell script *add_db.sh*.
-
+We need the file *pwdcdbrac_db2.270.1205326127* and not the alias. As *oracle* OS user:
 ```
-oracle@rkol7rac1a> cat add_db.sh 
-#!/bin/bash
-
-DB_NAME=cdbrac
-DB_UNIQUE_NAME=cdbrac_db2
-
-srvctl add database -db $DB_UNIQUE_NAME -dbname $DB_NAME \
-  -oraclehome /u01/oracle/rac19c \
-  -domain world \
-  -pwfile +DATA/DB_UNKNOWN/PASSWORD/pwddb_unknown.397.1202329809 \
-  -dbtype RAC -role PHYSICAL_STANDBY \
-  -diskgroup data,fra \
-  -spfile +DATA/DB_UNKNOWN/PASSWORD/pwddb_unknown.397.1202329809
-
-srvctl add instance -db $DB_UNIQUE_NAME -instance cdbrac1 -node rkol7rac1a
-srvctl add instance -db $DB_UNIQUE_NAME -instance cdbrac2 -node rkol7rac1b
-```
-
-Now we can run this script, create the cluster resources and start the local instance in *NOMOUNT* mode.
-
-```
-oracle@rkol7rac1a> bash -x ./add_db.sh 
-+ DB_NAME=cdbrac
-+ DB_UNIQUE_NAME=cdbrac_db2
-+ srvctl add database -db cdbrac_db2 -dbname cdbrac -oraclehome /u01/oracle/rac19c -domain world -pwfile +DATA/DB_UNKNOWN/PASSWORD/pwddb_unknown.397.1202329809 -dbtype RAC -role PHYSICAL_STANDBY -diskgroup data,fra -spfile +DATA/DB_UNKNOWN/PASSWORD/pwddb_unknown.397.1202329809
-+ srvctl add instance -db cdbrac_db2 -instance cdbrac1 -node rkol7rac1a
-+ srvctl add instance -db cdbrac_db2 -instance cdbrac2 -node rkol7rac1b
-oracle@rkol7rac1a> srvctl start instance -db cdbrac_db2 -instance cdbrac1 -startoption nomount
-oracle@rkol7rac1a> srvctl status database -db cdbrac_db2
-Instance cdbrac1 is running on node rkol7rac1a
-Instance cdbrac2 is not running on node rkol7rac1b
+oracle@rkol7rac2a> srvctl modify database -db cdbrac_db2 -pwfile +data/cdbrac_db2/password/pwdcdbrac_db2.270.1205326127
 ```
 
 ### Restore Primary Database To the Standby Database
@@ -431,6 +441,17 @@ We will use RMAN feature *"Restoring Data Files Over the Network"* for the
 RMAN RESTORE. In this case we don't have to customize any database network files.
 
 #### Restore Control Files
+
+At first, we are going to restore the standby control file using the primary database.
+
+Start up the standby database and don't mount it.
+
+```
+oracle@rkol7rac2a> sqlplus / as sysdba
+...
+SQL> startup nomount
+...
+```
 
 Create standby control files with RMAN using service:
 
