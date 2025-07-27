@@ -14,7 +14,7 @@ There are 2 RAC clusters consisting of the nodes *bol7rac2a*/*bol7rac2b* and *rk
 
 The RAC database was installed using the OS user "oracle". The primary RAC database *cdba02* runs on the servers *bol7rac1* and *bol7rac2* and uses ASM. The database unique name is *cdba02_dc1*. The database domain is *world*.
 
-In my previous blog [How to Add a Standby RAC Database?]({{< relref "create_standby_rac_db.md" >}}) I have already provided the basis steps. The new steps should accelerate creating a new large standby database.
+In my previous blog [How to Add a Standby RAC Database?]({{< relref "create_standby_rac_db.md" >}}) I have already provided the basic steps. The new steps should accelerate creating a new large standby database.
 
 Specific topics compared to the previous blog:
 > [!NOTE]
