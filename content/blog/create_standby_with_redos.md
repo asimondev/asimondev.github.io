@@ -1,5 +1,5 @@
 +++
-title = 'How To Create a Standby With Redo Transport'
+title = 'How To Create a Standby With Redo Transport?'
 date = 2025-07-07T21:29:38+02:00
 draft = false
 summary = """
