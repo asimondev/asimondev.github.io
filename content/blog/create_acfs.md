@@ -168,3 +168,87 @@ oracle@rkol7rac2b>
 ```
 
 ACFS is ready to use on both nodes.
+
+## Resize ACFS
+
+### Manual Resize
+
+If there is enough space in the ASM disk group, you can resize the ACFS mount point. 
+
+We want to change the size of this file system:
+```
+[root@rkol7rac2a ~]# /sbin/acfsutil info fs /cfg
+/cfg
+    ACFS Version: 19.0.0.0.0
+...
+    allocation unit:       4096
+    metadata block size:   4096
+    volumes:      1
+    total size:   1073741824  (   1.00 GB )
+    total free:   429023232  ( 409.15 MB )
+...
+```
+
+We can increase the size by 128MB:
+
+```
+[root@rkol7rac2a ~]# /sbin/acfsutil size +128M /cfg
+acfsutil size: new file system size: 1207959552 (1152MB)
+
+[root@rkol7rac2a ~]# /sbin/acfsutil info fs /cfg
+/cfg
+    ACFS Version: 19.0.0.0.0
+...
+    allocation unit:       4096
+    metadata block size:   4096
+    volumes:      1
+    total size:   1207959552  (   1.12 GB )
+    total free:   562974720  ( 536.89 MB )
+...
+```
+
+### Automatic Resize
+
+You can use *-a IncrementSize* option to automatically resize the ACFS by the specified increment. In such a case you should use *-x MaximumSize* option as well to set the maximum size of this file system.
+
+Enable automatic resize:
+```
+[root@rkol7rac2a ~]# /sbin/acfsutil size -a 64M -x 2048M /cfg
+acfsutil size: ACFS-03641: auto-resize increment below minimum 1G
+```
+
+Apparently we should increase the increment from 128MB to 1GB:
+```
+root@rkol7rac2a ~]# /sbin/acfsutil size -a 1G -x 2048M /cfg
+acfsutil size: ACFS-03642: successfully updated auto-resize settings
+[root@rkol7rac2a ~]# 
+```
+
+Let's check automatic resize properties of this file system:
+```
+[root@rkol7rac2a ~]# /sbin/acfsutil info fs /cfg
+/cfg
+    ACFS Version: 19.0.0.0.0
+...
+    total size:   2147483648  (   2.00 GB )
+    total free:   1500635136  (   1.40 GB )
+    auto-resize increment:   1073741824  (   1.00 GB )
+    auto-resize maximum:     2147483648  (   2.00 GB )
+...
+```
+
+We don't need automatic resize for this file system. So we disable this now:
+
+```
+[root@rkol7rac2a ~]# /sbin/acfsutil size -a 0 /cfg
+acfsutil size: ACFS-03642: successfully updated auto-resize settings
+[root@rkol7rac2a ~]# 
+
+[root@rkol7rac2a ~]# /sbin/acfsutil info fs /cfg
+/cfg
+    ACFS Version: 19.0.0.0.0
+...
+    total size:   2147483648  (   2.00 GB )
+    total free:   1500635136  (   1.40 GB )
+...
+```
