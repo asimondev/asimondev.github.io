@@ -42,10 +42,17 @@ theme = "hextra"
       icon = "github"
 
 [markup]
+  # This section configures the Table of Contents
+  [markup.tableOfContents]
+    startLevel = 2  # This is the most important setting. Start TOC from H2 (##) headings.
+    endLevel = 4    # Include headings up to H4 (####). Adjust as needed.
+    ordered = false # Set to true for numbered list (1., 2., 3.), false for bullet points.
+    
   [markup.goldmark]
     [markup.goldmark.parser.attribute]
       block = true
 
+    
 [params]
   description = "Modern, responsive, batteries-included Hugo theme for creating beautiful static websites."
 

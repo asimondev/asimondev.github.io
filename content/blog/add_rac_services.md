@@ -8,6 +8,10 @@ If you use RAC and Data Guard together, you can create RAC database services for
 tags = ["rac", "standby", "data guard"]
 +++
 
+## RAC Services & Data Guard
+
+### Configuration Details
+
 The example commands use the following configuration.
 
 There are 2 RAC clusters consisting of the nodes *bol7rac2a*/*bol7rac2b* and *rkol7rac2a*/*rkol7rac2b*. The primary RAC database *cdba02* runs on the servers *bol7rac1* and *bol7rac2* and uses ASM. The database unique name is *cdba02_dc1*. The database domain is *world*. The standby database uses the database unique name *cdba02_dc2*. No services existed before. Here is output of Data Guard configuration:
@@ -326,3 +330,107 @@ oracle@rkol7rac2a>
 ```
 
 So even after switchover all services are running correctly.
+
+## Add And Start Standby Service
+
+In the next example I would like to add a new RAC service *standby.word*. This service should run on both databases in the *PHYSICAL_STANDBY* role.
+
+### Standby Database
+
+Let's add and start this service to the standby database.
+
+We can add this service without any issue:
+```
+oracle@rkol7rac2a> ./add_service02.sh 
++ DB_NAME=cdba02
++ DB_UNIQUE_NAME=cdba02_dc2
++ PDB=cdba02_pdb1
++ srvctl add service -db cdba02_dc2 -service standby.world -role PHYSICAL_STANDBY -pdb cdba02_pdb1 -preferred cdba021,cdba022
+oracle@rkol7rac2a> 
+```
+
+But we can't start this service on the standby database:
+```
+oracle@rkol7rac2a> ./start_service02.sh 
++ DB_NAME=cdba02
++ DB_UNIQUE_NAME=cdba02_dc2
++ PDB=cdba02_pdb1
++ srvctl start service -db cdba02_dc2 -service standby.world
+PRCD-1133 : failed to start services standby.world for database cdba02_dc2
+PRCR-1095 : Failed to start resources using filter ((NAME == ora.cdba02_dc2.standby.world.svc) AND (TYPE == ora.service.type))
+CRS-5017: The resource action "ora.cdba02_dc2.standby.world.svc start" encountered the following error: 
+ORA-16000: database or pluggable database open for read-only access
+ORA-06512: at "SYS.DBMS_SERVICE", line 5
+ORA-06512: at "SYS.DBMS_SERVICE", line 288
+ORA-06512: at line 1
+. For details refer to "(:CLSN00107:)" in "/u01/grid_base/diag/crs/rkol7rac2a/crs/trace/crsd_oraagent_oracle.trc".
+
+CRS-2674: Start of 'ora.cdba02_dc2.standby.world.svc' on 'rkol7rac2a' failed
+CRS-5017: The resource action "ora.cdba02_dc2.standby.world.svc start" encountered the following error: 
+ORA-16000: database or pluggable database open for read-only access
+ORA-06512: at "SYS.DBMS_SERVICE", line 5
+ORA-06512: at "SYS.DBMS_SERVICE", line 288
+ORA-06512: at line 1
+. For details refer to "(:CLSN00107:)" in "/u01/grid_base/diag/crs/rkol7rac2b/crs/trace/crsd_oraagent_oracle.trc".
+
+CRS-2632: There are no more servers to try to place resource 'ora.cdba02_dc2.standby.world.svc' on that would satisfy its placement policy
+CRS-2674: Start of 'ora.cdba02_dc2.standby.world.svc' on 'rkol7rac2b' failed
+oracle@rkol7rac2a> 
+```
+
+We can see in the error messages, that Clusterware uses *SYS.DBMS_SERVICE* package. This means that some data must be in the database dictionary. But this is the standby read only database. No changes are possible here. 
+
+### Primary Database
+
+On the primary database we can add and start this service without any issues:
+
+```
+oracle@bol7rac2a> ./add_service02.sh 
++ DB_NAME=cdba02
++ DB_UNIQUE_NAME=cdba02_dc1
++ PDB=cdba02_pdb1
++ srvctl add service -db cdba02_dc1 -service standby.world -role PHYSICAL_STANDBY -pdb cdba02_pdb1 -preferred cdba021,cdba022
+
+oracle@bol7rac2a> ./start_service02.sh 
++ DB_NAME=cdba02
++ DB_UNIQUE_NAME=cdba02_dc1
++ PDB=cdba02_pdb1
++ srvctl start service -db cdba02_dc1 -service standby.world
+
+oracle@bol7rac2a> srvctl status service -db cdba02_dc1
+Service always.world is running on instance(s) cdba021,cdba022
+Service prod.world is running on instance(s) cdba021,cdba022
+Service read_only.world is not running.
+Service standby.world is running on instance(s) cdba021,cdba022
+```
+
+Even if this is a primary database, we can manually start the service for the physical standby role. We stop this service now:
+
+```
+oracle@bol7rac2a> ./stop_service02.sh 
++ DB_NAME=cdba02
++ DB_UNIQUE_NAME=cdba02_dc1
++ PDB=cdba02_pdb1
++ srvctl stop service -db cdba02_dc1 -service standby.world -force
+```
+
+The service with the name *standby.world* is now available in the database dictionary. We can now try to start this service again on the standby database:
+
+```
+oracle@rkol7rac2a> ./start_service02.sh 
++ DB_NAME=cdba02
++ DB_UNIQUE_NAME=cdba02_dc2
++ PDB=cdba02_pdb1
++ srvctl start service -db cdba02_dc2 -service standby.world
+
+oracle@rkol7rac2a> srvctl status service -db cdba02_dc2
+Service always.world is running on instance(s) cdba021,cdba022
+Service prod.world is not running.
+Service read_only.world is not running.
+Service standby.world is running on instance(s) cdba021,cdba022
+```
+
+It works now! 
+
+> [!TIP]
+> Sometimes it's important to add the service on the primary database at first. This would allow us to start this service on the standby database.
