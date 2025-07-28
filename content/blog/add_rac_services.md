@@ -37,7 +37,7 @@ SQL> show pdbs
 
     CON_ID CON_NAME			  OPEN MODE  RESTRICTED
 ---------- ------------------------------ ---------- ----------
-	 2 PDB$SEED			  READ ONLY  NO
+	 2 PDB$SEED			      READ ONLY  NO
 	 3 CDBA02_PDB1			  READ WRITE NO
 SQL> 
 ```
@@ -222,7 +222,7 @@ SQL> show pdbs
 
     CON_ID CON_NAME			  OPEN MODE  RESTRICTED
 ---------- ------------------------------ ---------- ----------
-	 2 PDB$SEED			  READ ONLY  NO
+	 2 PDB$SEED			      READ ONLY  NO
 	 3 CDBA02_PDB1			  READ ONLY  NO
 ```
 
