@@ -776,7 +776,7 @@ run {
   allocate channel d1 device type disk connect "/@cdba02_dc2_instance1 as sysdba";
   allocate channel d2 device type disk connect "/@cdba02_dc2_instance1 as sysdba";
 
-# 2 channels from the first node
+# 2 channels from the second node
   allocate channel d3 device type disk connect "/@cdba02_dc2_instance2 as sysdba";
   allocate channel d4 device type disk connect "/@cdba02_dc2_instance2 as sysdba";
 
